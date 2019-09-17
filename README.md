@@ -1,6 +1,6 @@
 # SQLite Structure Builder in XML Notation
 
-The SQLite Structure Builder in XML Notation - XQLite is a JavaScript object intended to create a SQLite language database pre-structure using XML notation.
+The SQLite Structure Builder in XML Notation - XSQLite is a JavaScript object intended to create a SQLite language database pre-structure using XML notation.
 
 The structure is formulated in SQL language (textual content), with commands based on the SQLite library, and includes the construction of tables, views and triggers that control the entry of information in the database and control the registration of updates.
 
