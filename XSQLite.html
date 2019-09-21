@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang='pt-br'>
+<head>
+<title>SQLite Trigger Creator</title>
+<meta charset='utf-8'>
+<style>
+* {box-sizing: border-box;}
+</style>
+<script src="SQLite.js"></script>
+<script>
+function start() {
+	try {
+		var x = XSQLite(document.getElementById("xml").value);
+		document.getElementById("sqlite").textContent = x.toSQL();;
+	} catch(e) {
+		console.log(e);
+		document.getElementById("sqlite").textContent = e;
+	}
+	return;	
+};
+
+window.addEventListener("load", start);
+
+</script>
+</head>
+
+<body style="margin: 0; padding: 10px;">
+
+<h3>SQLite Trigger Creator</h3>
+<form>
+	<textarea id="xml" style="color: teal; width: 100%; height: 30%; padding: 0.5em;" >
+<sql>
+	<table name="table1">
+		<column name="cText" type="text" unique="true" null="true" min="5" max="10" default="WILLIAN DONADELLI" >
+			<type>-- Type message --</type>
+			<unique>-- Unique message --</unique>
+			<null>-- Null message --</null>
+			<min>-- Min message --</min>
+			<max>-- Max message --</max>
+		</column>
+		<column name="cNumb" type="number" unique="true" null="false" min="5" max="10" default="20" />
+		<column name="cBool" type="boolean" null="true" default="1" unique="true" />
+		<column name="cDate" type="date" unique="true" null="true" min="2010-01-01" max="DATE()" default="2010-02-02" />
+		<column name="cTime" type="time" unique="true" null="true" min="23:23:00" max="TIME()" default="TIME()" />
+		<column name="cFree" type="free" unique="true" null="true" min="5" max="10"/>
+		<column name="cKeys" type="id" target="targetTable" />
+	</table>
+</sql>
+	</textarea>
+	<button id="result" type="button" onclick="start();" style="display: block;">Executar</button>
+</form>
+
+<pre id="sqlite" style="color: royalblue;" style="overflow: auto; height"></pre>
+
+</body>
+</html>
