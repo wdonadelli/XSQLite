@@ -1,464 +1,308 @@
 "use strict";
 
 var XSQLite = (function() {
+	var CONFIG, FREE, NUMBER, TEXT, BOOLEAN, DATE, TIME, ID;
 
-	/*-- Configuration --*/
-	var TYPES = {
-		text: {},
-		number: {},
-		boolean: {},
-		date: {},
-		time: {},
-		free: {},
-		id: {}
-	};
+	/*-- CONFIGURAÇÃO: tipos --*/
+
+	CONFIG = {};
+
+	CONFIG.free    = {};
+	CONFIG.number  = {};
+	CONFIG.text    = {};
+	CONFIG.boolean = {};
+	CONFIG.date    = {};
+	CONFIG.time    = {};
+	CONFIG.id      = {};
 	
-	/*-- Configuration: TYPES --*/
-	TYPES.text = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
+	FREE    = CONFIG.free;
+	NUMBER  = CONFIG.number;
+	TEXT    = CONFIG.text;
+	BOOLEAN = CONFIG.boolean;
+	DATE    = CONFIG.date;
+	TIME    = CONFIG.time;
+	ID      = CONFIG.id;
 
-	TYPES.number = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
+	/*-- CONFIGURAÇÃO: produtos --*/
 
-	TYPES.boolean = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
+	for (var type in CONFIG) {
+		CONFIG[type].value   = {};
+		CONFIG[type].column  = {};
+		CONFIG[type].view    = {};
+		CONFIG[type].trigger = {};
+	}
 
-	TYPES.date = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
+	/*-- CONFIGURAÇÃO: valores --*/
 
-	TYPES.time = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
-
-	TYPES.free = {
-		value: {},
-		column: {},
-		view: {},
-		trigger: {}
-	};
-
-	TYPES.id = {
-		value: {},
-		column: {},
-		foreign: {},
-		view: {},
-		trigger: {}
-	};
-
-	/*-- Configuration: Value --*/
-	TYPES.text.value = {
-		name: xName,
-		type: xType,
-		unique: xUnique,
-		null: xNull,
-		default: xText,
-		min: xChars,
-		max: xChars
-	};
-
-	TYPES.number.value = {
-		name: xName,
-		type: xType,
-		unique: xUnique,
-		null: xNull,
-		default: xNumber,
-		min: xNumber,
-		max: xNumber
-	};
-
-	TYPES.boolean.value = {
-		name: xName,
-		type: xType,
-		null: xNull,
-		default: xBoolean
-	};
-
-	TYPES.date.value = {
-		name: xName,
-		type: xType,
-		unique: xUnique,
-		null: xNull,
-		default: xDate,
-		min: xDate,
-		max: xDate
-	};
-
-	TYPES.time.value = {
-		name: xName,
-		type: xType,
-		unique: xUnique,
-		null: xNull,
-		default: xTime,
-		min: xTime,
-		max: xTime
-	};
-
-	TYPES.free.value = {
-		name: xName,
-		type: xType,
-		unique: xUnique,
-		null: xNull,
-		default: xFree,
-		min: xFree,
-		max: xFree,
-		glob: xFree,
-		like: xFree
-	};
-
-	TYPES.id.value = {
-		name: xName,
-		type: xType,
-		target: xName
-	};
-
-	/*-- Configuration: column --*/
-	TYPES.text.column = {
-		type: function(val) {return val.name+" TEXT";},
-		unique: cUnique,
-		null: cNull,
-		default: cDefault,
-	};
-
-	TYPES.number.column = {
-		type: function(val) {return val.name+" NUMBER";},
-		unique: cUnique,
-		null: cNull,
-		default: cDefault,
-	};
-
-	TYPES.boolean.column = {
-		type: function(val) {return val.name+" INTEGER";},
-		null: cNull,
-		default: cDefault
-	};
-
-	TYPES.date.column = {
-		type: function(val) {return val.name+" TEXT";},
-		unique: cUnique,
-		null: cNull,
-		default: cDefault,
-	};
-
-	TYPES.time.column = {
-		type: function(val) {return val.name+" TEXT";},
-		unique: cUnique,
-		null: cNull,
-		default: cDefault,
-	};
-
-	TYPES.free.column = {
-		type: function(val) {return val.name+" TEXT";},
-		unique: cUnique,
-		null: cNull,
-		default: cDefault,
-	};
-
-	TYPES.id.column = {
-		type: function(val) {return val.name+" INTEGER";}
-	};
-
-	/*-- Configuration: foreign --*/
-	TYPES.id.foreign = {
-		key: function(val) {return "FOREIGN KEY("+val.name+") REFERENCES "+val.target+"(_id_) ON UPDATE CASCADE";}
-	};
-
-	/*-- Configuration: trigger INSERT/UPDATE BEFORE --*/
-	/**
-	não aceitar string vazia (string vazia é NULL) [TRIM(new.col) = ''] "pensar melhor a respeito ('' x NULL x DEFAULT -> eu quero uma string em branco ou o valor default)"
-	
-	**/
-	TYPES.text.trigger = {
-		type: function(val) {
-			var sql = tIsNull(val);
-			sql += "(new."+val.name+" GLOB '*[^A-Z ]*' ";
-			sql += "OR REPLACE(TRIM(new."+val.name+"), '  ', ' ') != new."+val.name+" ";
-			sql += "OR TRIM(new."+val.name+") = '')";
-				return sql;
-		},
-		unique: tUnique,
-		null: tNull,
-		min: function(val) {return tIsNull(val)+"(LENGTH(new."+val.name+") < "+val.min+")";},
-		max: function(val) {return tIsNull(val)+"(LENGTH(new."+val.name+") > "+val.max+")";}
-	};
-
-	TYPES.number.trigger = {
-		type: function(val) {return tIsNull(val)+"(UPPER(TYPEOF(new."+val.name+")) NOT IN ('NUMERIC', 'INTEGER', 'REAL'))";},
-		unique: tUnique,
-		null: tNull,
-		min: tMin,
-		max: tMax
-	};
-
-	TYPES.boolean.trigger = {
-		type: function(val) {return tIsNull(val)+"(new."+val.name+" NOT IN (0,1))";},
-		null: tNull,
-	};
-
-	TYPES.date.trigger = {
-		type: function(val) {return tIsNull(val)+"(DATE(new."+val.name+", '+1 day', '-1 day') != new."+val.name+")";},
-		unique: tUnique,
-		null: tNull,
-		min: tMin,
-		max: tMax
-	};
-
-	TYPES.time.trigger = {
-		type: function(val) {return tIsNull(val)+"(TIME(new."+val.name+") IS NULL OR new."+val.name+" NOT GLOB '[0-2][0-9]:[0-5][0-9]*')";},
-		unique: tUnique,
-		null: tNull,
-		min: tMin,
-		max: tMax
-	};
-
-	TYPES.free.trigger = {
-		type: function(val) {return tIsNull(val)+"(UPPER(TYPEOF(new."+val.name+")) != 'TEXT')";},
-		unique: tUnique,
-		null: tNull,
-		min: tMin,
-		max: tMax,
-		glob: function(val) {return tIsNull(val)+"(new."+val.name+" NOT GLOB "+val.glob+")";},
-		like: function(val) {return tIsNull(val)+"(new."+val.name+" NOT LIKE "+val.like+")";},
-	};
-
-	TYPES.id.trigger = {
-		type: function(val) {return "(new."+val.name+" IS NULL) OR ((SELECT COUNT(*) FROM "+val.target+" WHERE _id_ = new."+val.name+") != 1)";}
-	};
-
-	/*-- Configuration: messages --*/
-	TYPES.text.message = {
-		type: function(val) {return val.name+": Enter only letters and simple spaces.";},
-		unique: mUnique,
-		null: mNull,
-		min: function(val) {return val.name+": Amount of characters less than allowed.";},
-		max: function(val) {return val.name+": Amount of characters greater than allowed.";}
-	};
-
-	TYPES.number.message = {
-		type: function(val) {return val.name+": The value must be numeric.";},
-		unique: mUnique,
-		null: mNull,
-		min: mMin,
-		max: mMax
-	};
-
-	TYPES.boolean.message = {
-		type: function(val) {return val.name+": The value must be boolean (1 or 0).";},
-		null: mNull,
-	};
-
-	TYPES.date.message = {
-		type: function(val) {return val.name+": Enter a valid date.";},
-		unique: mUnique,
-		null: mNull,
-		min: mMin,
-		max: mMax
-	};
-
-	TYPES.time.message = {
-		type: function(val) {return val.name+": Enter a valid time.";},
-		unique: mUnique,
-		null: mNull,
-		min: mMin,
-		max: mMax
-	};
-
-	TYPES.free.message = {
-		type: function(val) {return val.name+": Enter a textual value";},
-		unique: mUnique,
-		null: mNull,
-		min: mMin,
-		max: mMax,
-		glob: mPattern,
-		like: mPattern
-	};
-
-	TYPES.id.message = {
-		type: function(val) {return val.name+": Register not found in table "+val.target+".";}
-	};
-
-	/*-- Configuration: INSERT LOG --*/
-	TYPES.text.log = {
-		type: function(val) {return "WHEN TRIM(new."+val.name+") = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new."+val.name+")), '  ', ' ')";}
-	};
-
-	TYPES.number.log = {
-		type: function(val) {return "ABS(new."+val.name+") <> 0 OR new."+val.name+" = 0 THEN CAST(new.%col AS REAL) ELSE new.%col"+val.name;}
-	};
-
-	TYPES.boolean.log = {
-		type: function(val) {return "UPPER(new."+val.name+") IN ('TRUE', '1') THEN 1 WHEN UPPER(new."+val.name+"l) IN ('FALSE', '0') THEN 0 ELSE new."+val.name;}
-	};
-
-	TYPES.date.log = {
-		type: function(val) {return "TRIM("+val.name+")";}
-	};
-
-	TYPES.time.log = {
-		type: function(val) {return "TRIM("+val.name+")";}
-	};
-
-	TYPES.free.log = {
-		type: function(val) {return "TRIM("+val.name+")";}
-	};
-
-	TYPES.id.log = {
-		type: function(val) {return "TRIM("+val.name+")";}
-	};
-
-	/*-- Get attribute value --*/
-	function xType(value) {
-		return value !== null && value in TYPES ? value : "free";
-	};
-
-	function xName(value) {
-		return value !== null && (/^[A-Z]([A-Z0-9\_]+)?$/i).test(value) ? value : null;
-	};
-
-	function xUnique(value) {
-		return value === null || value.toLowerCase() !== "true" ? null : true;
-	};
-
-	function xNull(value) {
-		return value === null || value.toLowerCase() !== "false" ? null : false;
-	};
-
-	function xText(value) {
-		return value !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/).test(value) ? "'"+value+"'" : null;
-	};
-
-	function xChars(value) {
-		return value !== null && (/^[1-9]([0-9]+)?$/).test(value) ? value : null;
-	};
-
-	function xNumber(value) {
-		return !isNaN(value) ? value : null;
-	};
-	
-	function xBoolean(value) {
-		return value !== null && (/^[01]?$/).test(value) ? value : null;
-	};
-
-	function xDate(value) {
-		if ((/^[0-9]{4}(\-[0-9]{2}){2}$/).test(value)) {
-			value = "'"+value+"'"
-		} else if ((/^DATE\(.*\)$/).test(value)) {
-			value = value;
+	/*-- free --*/
+	FREE.value = {};
+	FREE.value.name    = function (val) {return val !== null && (/^[A-Z]([A-Z0-9\_]+)?$/i).test(val) ? val : null;}
+	FREE.value.type    = function (val) {return val !== null && val in CONFIG ? val : "free";}
+	FREE.value.unique  = function (val) {return val === null || val.toLowerCase() !== "true" ? null : true;}
+	FREE.value.null    = function (val) {return val === null || val.toLowerCase() !== "false" ? null : false;}
+	FREE.value.default = function (val) {return val !== null ? "'"+val+"'" : null;}
+	FREE.value.min     = FREE.value.default;
+	FREE.value.max     = FREE.value.default;
+	FREE.value.glob    = FREE.value.default;
+	FREE.value.like    = FREE.value.default;
+	/*-- number --*/
+	NUMBER.value = {};
+	NUMBER.value.name    = FREE.value.name;
+	NUMBER.value.type    = FREE.value.type;
+	NUMBER.value.unique  = FREE.value.unique;
+	NUMBER.value.null    = FREE.value.null;
+	NUMBER.value.default = function (val) {return !isNaN(val) ? val : null;}
+	NUMBER.value.min     = NUMBER.value.default;
+	NUMBER.value.max     = NUMBER.value.default;
+	/*-- text --*/
+	TEXT.value = {};
+	TEXT.value.name    = FREE.value.name;
+	TEXT.value.type    = FREE.value.type;
+	TEXT.value.unique  = FREE.value.unique;
+	TEXT.value.null    = FREE.value.null;
+	TEXT.value.default = function (val) {return val !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/).test(val) ? "'"+val+"'" : null;}
+	TEXT.value.min     = function (val) {return val !== null && (/^[1-9]([0-9]+)?$/).test(val) ? val : null;}
+	TEXT.value.max     = TEXT.value.min;
+	/*-- boolean --*/
+	CONFIG.boolean.value = {};
+	CONFIG.boolean.value.name    = FREE.value.name;
+	CONFIG.boolean.value.type    = FREE.value.type;
+	CONFIG.boolean.value.null    = FREE.value.null;
+	CONFIG.boolean.value.default = function (val) {return val !== null && (/^[01]?$/).test(val) ? val : null;}
+	/*-- date --*/
+	DATE.value = {};
+	DATE.value.name    = FREE.value.name;
+	DATE.value.type    = FREE.value.type;
+	DATE.value.unique  = FREE.value.unique;
+	DATE.value.null    = FREE.value.null;
+	DATE.value.default = function (val) {
+		if ((/^[0-9]{4}(\-[0-9]{2}){2}$/).test(val)) {
+			val = "'"+val+"'"
+		} else if ((/^DATE\(.*\)$/).test(val)) {
+			val = val;
 		} else {
-			value = null;
+			val = null;
 		}
-		return value;
-	};
-
-	function xTime(value) {
-		if ((/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/).test(value)) {
-			value = "'"+value+"'"
-		} else if ((/^TIME\(.*\)$/).test(value)) {
-			value = value;
+		return val;
+	}
+	DATE.value.min     = DATE.value.default;
+	DATE.value.max     = DATE.value.default;
+	/*-- time --*/
+	TIME.value = {};
+	TIME.value.name    = FREE.value.name;
+	TIME.value.type    = FREE.value.type;
+	TIME.value.unique  = FREE.value.unique;
+	TIME.value.null    = FREE.value.null;
+	TIME.value.default = function (val) {
+		if ((/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/).test(val)) {
+			val = "'"+val+"'"
+		} else if ((/^TIME\(.*\)$/).test(val)) {
+			val = val;
 		} else {
-			value = null;
+			val = null;
 		}
-		return value;
-	};
+		return val;
+	}
+	TIME.value.min     = TIME.value.default;
+	TIME.value.max     = TIME.value.default;
+	/*-- id --*/
+	ID.value = {};
+	ID.value.name   = FREE.value.name;
+	ID.value.type   = FREE.value.type;
+	ID.value.target = FREE.value.name;
 
-	function xFree(value) {
-		return value !== null ? "'"+value+"'" : null;
-	};
+	/*-- CONFIGURAÇÃO: colunas --*/
 
-	/*-- Get Column constraint --*/
-	function cUnique(val) {
-		return "UNIQUE";
-	};
+	/*-- free --*/
+	FREE.column = {};
+	FREE.column.type    = function (val) {return val.name+" TEXT";}
+	FREE.column.unique  = function (val) {return "UNIQUE";}
+	FREE.column.null    = function (val) {return "NOT NULL";}
+	FREE.column.default = function (val) {return "DEFAULT("+val.default+")";}
+	/*-- number --*/
+	NUMBER.column = {};
+	NUMBER.column.type    = function(val) {return val.name+" NUMBER";}
+	NUMBER.column.unique  = FREE.column.unique;
+	NUMBER.column.null    = FREE.column.null;
+	NUMBER.column.default = FREE.column.default;
+	/*-- text --*/
+	TEXT.column = {};
+	TEXT.column.type    = FREE.column.type;
+	TEXT.column.unique  = FREE.column.unique;
+	TEXT.column.null    = FREE.column.null;
+	TEXT.column.default = FREE.column.default;
+	/*-- boolean --*/
+	CONFIG.boolean.column = {};
+	CONFIG.boolean.column.type    = function(val) {return val.name+" INTEGER";}
+	CONFIG.boolean.column.null    = FREE.column.null;
+	CONFIG.boolean.column.default = FREE.column.default;
+	/*-- date --*/
+	DATE.column = {};
+	DATE.column.type    = FREE.column.type;
+	DATE.column.unique  = FREE.column.unique;
+	DATE.column.null    = FREE.column.null;
+	DATE.column.default = FREE.column.default;
+	/*-- time --*/
+	TIME.column = {};
+	TIME.column.type    = FREE.column.type;
+	TIME.column.unique  = FREE.column.unique;
+	TIME.column.null    = FREE.column.null;
+	TIME.column.default = FREE.column.default;
+	/*-- id --*/
+	ID.column = {};
+	ID.column.type = CONFIG.boolean.column.type;
 
-	function cNull(val) {
-		return "NOT NULL";
-	};
-
-	function cDefault(val) {
-		return "DEFAULT("+val.default+")";
-	};
+	/*-- CONFIGURAÇÃO: chave estrangeira --*/
 	
-	/*-- Get trigger constraint --*/
-	function tUnique(val) {
-		return tIsNull(val)+"((SELECT COUNT(*) FROM "+val.tab+" WHERE "+val.name+" = new."+val.name+") > 0)";
-	};
+	/*-- id --*/
+	ID.foreign = {};
+	ID.foreign.key =  function(val) {return "FOREIGN KEY("+val.name+") REFERENCES "+val.target+"(_id_) ON UPDATE CASCADE";}
 
-	function tNull(val) {
-		return "(new."+val.name+" IS NULL OR TRIM(new."+val.name+") = '')";
-	};
+	/*-- CONFIGURAÇÃO: gatilhos INSERT/UPDATE BEFORE --*/
 
-	function tMin(val) {
-		return tIsNull(val)+"(new."+val.name+" < "+val.min+")";
-	};
+	/*-- free --*/
+	FREE.trigger = {};
+	FREE.trigger.unique = function (val) {return "((SELECT COUNT(*) FROM "+val.tab+" WHERE "+val.name+" = new."+val.name+") > 0)";}
+	FREE.trigger.null   = function (val) {return "(new."+val.name+" IS NULL OR TRIM(new."+val.name+") = '')";}
+	FREE.trigger.min    = function (val) {return "(new."+val.name+" < "+val.min+")";}
+	FREE.trigger.max    = function (val) {return "(new."+val.name+" > "+val.max+")";}
+	FREE.trigger.glob   = function (val) {return "(new."+val.name+" NOT GLOB "+val.glob+")";}
+	FREE.trigger.like   = function (val) {return "(new."+val.name+" NOT LIKE "+val.like+")";}
+	/*-- number --*/
+	NUMBER.trigger = {};
+	NUMBER.trigger.type   = function(val) {return "(UPPER(TYPEOF(new."+val.name+")) NOT IN ('NUMERIC', 'INTEGER', 'REAL'))";}
+	NUMBER.trigger.unique = FREE.trigger.unique
+	NUMBER.trigger.null   = FREE.trigger.null
+	NUMBER.trigger.min    = FREE.trigger.min
+	NUMBER.trigger.max    = FREE.trigger.max
+	/*-- text --*/
+	TEXT.trigger = {};
+	TEXT.trigger.type   = function(val) {
+		var sql;
+		sql  = "(UPPER(new."+val.name+") GLOB '*[^A-Z ]*' ";
+		sql += "OR REPLACE(TRIM(new."+val.name+"), '  ', ' ') != new."+val.name+" ";
+		sql += "OR TRIM(new."+val.name+") = '')";
+		return sql;
+	},
+	TEXT.trigger.unique = function (val) {return "((SELECT COUNT(*) FROM "+val.tab+" WHERE UPPER("+val.name+") = UPPER(new."+val.name+")) > 0)";}
+	TEXT.trigger.null   = FREE.trigger.null;
+	TEXT.trigger.min    = function(val) {return "(LENGTH(new."+val.name+") < "+val.min+")";}
+	TEXT.trigger.max    = function(val) {return "(LENGTH(new."+val.name+") > "+val.max+")";}
+	/*-- boolean --*/
+	CONFIG.boolean.trigger = {};
+	CONFIG.boolean.trigger.type = function(val) {return "(new."+val.name+" NOT IN (0,1))";}
+	CONFIG.boolean.trigger.null = FREE.trigger.null;
+	/*-- date --*/
+	DATE.trigger = {};
+	DATE.trigger.type   = function(val) {return "(DATE(new."+val.name+", '+1 day', '-1 day') != new."+val.name+")";}
+	DATE.trigger.unique = FREE.trigger.unique;
+	DATE.trigger.null   = FREE.trigger.null;
+	DATE.trigger.min    = FREE.trigger.min;
+	DATE.trigger.max    = FREE.trigger.max;
+	/*-- time --*/
+	TIME.trigger = {};
+	TIME.trigger.type   = function(val) {return "(TIME(new."+val.name+") IS NULL OR new."+val.name+" NOT GLOB '[0-2][0-9]:[0-5][0-9]*')";}
+	TIME.trigger.unique = FREE.trigger.unique;
+	TIME.trigger.null   = FREE.trigger.null;
+	TIME.trigger.min    = FREE.trigger.min;
+	TIME.trigger.max    = FREE.trigger.max;
+	/*-- id --*/
+	ID.trigger = {};
+	ID.trigger.type = function(val) {return "(new."+val.name+" IS NULL) OR ((SELECT COUNT(*) FROM "+val.target+" WHERE _id_ = new."+val.name+") != 1)";}
 
-	function tMax(val) {
-		return tIsNull(val)+"(new."+val.name+" > "+val.max+")";
-	};
+	/*-- CONFIGURAÇÃO: menssages --*/
 
-	function tIsNull(val) {
-		return val.null === null ? "(new."+val.name+" IS NOT NULL) AND " : "";
-	};
+	/*-- free --*/
+	FREE.message = {};
+	FREE.message.type   = function (val) {return val.name+": Enter a textual value";}
+	FREE.message.unique = function (val) {return val.name+": Existing registration.";}
+	FREE.message.null   = function (val) {return val.name+": Required value.";}
+	FREE.message.min    = function (val) {return val.name+": Value less than allowed.";}
+	FREE.message.max    = function (val) {return val.name+": Greater than allowed value.";}
+	FREE.message.glob   = function (val) {return val.name+": Value in the wrong format.";}
+	FREE.message.like   = FREE.message.glob;
+	/*-- number --*/
+	NUMBER.message = {};
+	NUMBER.message.type   = function(val) {return val.name+": The value must be numeric.";}
+	NUMBER.message.unique = FREE.message.unique;
+	NUMBER.message.null   = FREE.message.null;
+	NUMBER.message.min    = FREE.message.min;
+	NUMBER.message.max    = FREE.message.min;
+	/*-- text --*/
+	TEXT.message = {};
+	TEXT.message.type   = function(val) {return val.name+": Enter only letters and simple spaces.";}
+	TEXT.message.unique = FREE.message.unique;
+	TEXT.message.null   = FREE.message.null;
+	TEXT.message.min    =  function(val) {return val.name+": Amount of characters less than allowed.";}
+	TEXT.message.max    =  function(val) {return val.name+": Amount of characters greater than allowed.";}
+	/*-- boolean --*/
+	CONFIG.boolean.message = {}
+	CONFIG.boolean.message.type = function(val) {return val.name+": The value must be boolean (1 or 0).";}
+	CONFIG.boolean.message.null = FREE.message.null;
+	/*-- date --*/
+	DATE.message = {};
+	DATE.message.type   = function(val) {return val.name+": Enter a valid date.";}
+	DATE.message.unique = FREE.message.unique;
+	DATE.message.null   = FREE.message.null;
+	DATE.message.min    = FREE.message.min;
+	DATE.message.max    = FREE.message.min;
+	/*-- time --*/
+	TIME.message = {};
+	TIME.message.type   = function(val) {return val.name+": Enter a valid time.";}
+	TIME.message.unique = FREE.message.unique;
+	TIME.message.null   = FREE.message.null;
+	TIME.message.min    = FREE.message.min;
+	TIME.message.max    = FREE.message.min;
+	/*-- id --*/
+	ID.message = {};
+	ID.message.type = function(val) {return val.name+": Register not found in table "+val.target+".";}
 
-	/*-- Get trigger messages --*/
-	function mUnique(val) {
-		return val.name+": Existing registration.";
-	};
+	/*-- CONFIGURAÇÃO: INSERT LOG --*/ //FIXME: precisa disso? para que serve?
 
-	function mNull(val) {
-		return val.name+": Required value.";
-	};
-
-	function mMin(val) {
-		return val.name+": Value less than allowed.";
-	};
-
-	function mMax(val) {
-		return val.name+": Greater than allowed value.";
-	};
-
-	function mPattern(val) {
-		return val.name+": Value in the wrong format."
-	};
+	/*-- free --*/
+	FREE.log = {};
+		FREE.log.type = function(val) {return "TRIM("+val.name+")";}
+	/*-- number --*/
+	NUMBER.log = {};
+	NUMBER.log.type = function(val) {return "ABS(new."+val.name+") <> 0 OR new."+val.name+" = 0 THEN CAST(new.%col AS REAL) ELSE new.%col"+val.name;}
+	/*-- text --*/
+	TEXT.log = {};
+	TEXT.log.type = function(val) {return "WHEN TRIM(new."+val.name+") = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new."+val.name+")), '  ', ' ')";}
+	/*-- boolean --*/
+	CONFIG.boolean.log = {};
+	CONFIG.boolean.log.type = function(val) {return "UPPER(new."+val.name+") IN ('TRUE', '1') THEN 1 WHEN UPPER(new."+val.name+"l) IN ('FALSE', '0') THEN 0 ELSE new."+val.name;}
+	/*-- date --*/
+	DATE.log = {};
+	DATE.log.type = function(val) {return "TRIM("+val.name+")";}
+	/*-- time --*/
+	TIME.log = {};
+	TIME.log.type = function(val) {return "TRIM("+val.name+")";}
+	/*-- id --*/
+	ID.log = {};
+	ID.logtype = function(val) {return "TRIM("+val.name+")";}
 
 	/*-- Get All Information from column --*/
+
 	function xAttributes(col) {
 		var type, obj, value;
 		/*-- getting type --*/
-		type = xType(col.getAttribute("type"));
+		type = FREE.value.type(col.getAttribute("type"));
 		/*-- setting obj var --*/
 		obj  = {value: {}};
 		/*-- getting column values --*/
-		for (var val in TYPES[type].value) {
-			obj.value[val] = TYPES[type].value[val](col.getAttribute(val));
+		for (var val in CONFIG[type].value) {
+			obj.value[val] = CONFIG[type].value[val](col.getAttribute(val));
 		}
 		/*-- getting table name --*/
-		obj.value.tab = xName(col.parentNode.getAttribute("name"));
+		obj.value.tab = FREE.value.name(col.parentNode.getAttribute("name"));
 		/*-- getting the other information (Except "value".) --*/
-		for (var key in TYPES[type]) {
+		for (var key in CONFIG[type]) {
 			if (key !== "value") {
 				obj[key] = {};
-				for (var att in TYPES[type][key]) {
+				for (var att in CONFIG[type][key]) {
 					/*-- getting value (if not null) --*/
 					if (obj.value[att] !== null) {
-						value = TYPES[type][key][att](obj.value);
+						value = CONFIG[type][key][att](obj.value);
 						if (key === "message" && col.getElementsByTagName(att).length > 0) {
 							value = col.getElementsByTagName(att)[0].childNodes[0].nodeValue;
 						}
@@ -467,11 +311,12 @@ var XSQLite = (function() {
 					}
 				}
 			}
-		}/*console.log(obj);*/
+		}
 		return obj;
 	};
 
-	/*-- Errors --*/
+	/*-- Erros --*/
+
 	var errors = {
 		root: "Root element not found.",
 		roots: "More than one root element was found.",
@@ -512,7 +357,7 @@ var XSQLite = (function() {
 			} else {
 				tname.push(val);
 			}
-			if (xName(val) === null) {
+			if (FREE.value.name(val) === null) {
 				log.push({tab: tab, col: "-", attr: "name", val: val, msg: errors.name});
 			}
 			/*-- CHECKING COLUMN TAG --*/
@@ -531,13 +376,13 @@ var XSQLite = (function() {
 				} else {
 					cname.push(val);
 				}
-				if (xName(val) === null) {
+				if (FREE.value.name(val) === null) {
 					log.push({tab: tab, col: col, attr: "name", val: val, msg: errors.name});
 				}
 				/*-- CHECKING ATTRIBUTES COLUMN TAG --*/
 				/*-- getting attributes to chack --*/
-				val = xType(cols[c].getAttribute("type"));
-				attr = TYPES[val].value;
+				val = FREE.value.type(cols[c].getAttribute("type"));
+				attr = CONFIG[val].value;
 				for (var a in attr) {
 					/*-- attributes to ignore --*/
 					if (["unique", "null", "type", "name"].indexOf(a) >= 0) {
@@ -585,6 +430,7 @@ var XSQLite = (function() {
 	}
 
 	/*-- SQL COLUMN --*/
+
 	function createColumn(col) {
 		var sql, seq;
 		sql = [];
@@ -602,6 +448,7 @@ var XSQLite = (function() {
 	};
 
 	/*-- SQL TABLE --*/
+
 	function createTable(tab) {
 		var sql, cols, keys, col, child;
 		sql   = [];
@@ -634,7 +481,8 @@ var XSQLite = (function() {
 		return sql.join("\n");
 	};
 
-	/*-- SQL VIEW --*/
+	/*-- SQL VIEW --*/ //FIXME: precisa disso?
+
 	function createView(tab) {
 		var sql, col, child;
 		sql   = [];
@@ -654,6 +502,7 @@ var XSQLite = (function() {
 	};
 
 	/*-- SQL LOG --*/
+
 	function createLog(tab) {
 		var sql, cols, col, child;
 		sql   = [];
@@ -661,10 +510,10 @@ var XSQLite = (function() {
 		child = tab.getElementsByTagName("column");
 		/*-- starting log --*/
 		sql.push("CREATE TABLE IF NOT EXISTS _"+tab.getAttribute("name")+"_ (");
-		/*-- adding event column --*/
-		cols.push("_event_ TEXT CHECK(_event_ IN (-1, 0, 1))");
 		/*-- adding log column --*/
 		cols.push("_log_ TEXT DEFAULT(DATETIME('now', 'localtime'))");
+		/*-- adding event column --*/
+		cols.push("_event_ TEXT CHECK(_event_ IN (-1, 0, 1))");
 		/*-- adding id column --*/
 		cols.push("_id_ INTEGER");
 		/*-- looping in columns --*/
@@ -682,6 +531,7 @@ var XSQLite = (function() {
 	};
 
 	/*-- SQL TRIGGER CASES --*/
+
 	function createCase(col) {
 		var sql, seq;
 		sql = [];
@@ -692,7 +542,11 @@ var XSQLite = (function() {
 		for (var i = 0; i < seq.length; i++) {
 			/*-- adding values --*/
 			if (seq[i] in col.trigger) {
-				sql.push("\t\tWHEN "+col.trigger[seq[i]]+" THEN");
+				if ("null" in col.value && col.value.null !== false) {
+					sql.push("\t\tWHEN (new."+col.value.name+" IS NOT NULL) AND "+col.trigger[seq[i]]+" THEN");
+				} else {
+					sql.push("\t\tWHEN "+col.trigger[seq[i]]+" THEN");
+				}
 				sql.push("\t\t\tRAISE(ABORT, '"+col.message[seq[i]]+"')");
 			}
 		}
@@ -702,6 +556,7 @@ var XSQLite = (function() {
 	};
 
 	/*-- SQL TRIGGER BEFORE --*/
+
 	function createTriggerBefore(tab, trigger) {
 		var sql, col, cases, child, name;
 		sql   = [];
@@ -856,7 +711,7 @@ var XSQLite = (function() {
 				tabs = this._x.getElementsByTagName("sql")[0].getElementsByTagName("table");
 				for (var i = 0; i < tabs.length; i++) {
 					sql.push(createTable(tabs[i]));
-					sql.push(createView(tabs[i]));
+					//sql.push(createView(tabs[i]));
 					sql.push(createLog(tabs[i]));
 					sql.push(createTriggerBefore(tabs[i], "INSERT"));
 					sql.push(createTriggerBefore(tabs[i], "UPDATE"));
@@ -923,7 +778,7 @@ window.addEventListener("load", function() {
 
 
 
-/*****************************************************************************/
+/*
 function SQLite(json) {
 	if (!(this instanceof SQLite)) {
 		return new SQLite(json);
@@ -948,7 +803,6 @@ Object.defineProperty(SQLite.prototype, "constructor", {
 	value: SQLite
 });
 
-/*Types and attributes*/
 Object.defineProperty(SQLite.prototype, "types", {
 	value: {
 		key: {
@@ -984,7 +838,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "new.%col GLOB '*[^A-Z ]*' OR INSTR(new.%col), '  ') > 0",
 				error: "Enter only letters and simple spaces."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1046,7 +900,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "UPPER(TYPEOF(new.%col)) NOT IN ('NUMBER', 'INTEGER', 'REAL')",
 				error: "The value must be numeric."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1108,7 +962,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "new.%col NOT IN (0, 1)",
 				error: "The value must be boolean."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1140,7 +994,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "DATE(new.%col, '+1 day', '-1 day') != new.%col",
 				error: "Please enter a valid date."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1202,7 +1056,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "TIME(new.%col) IS NULL OR new.%col NOT GLOB '[0-2][0-9]:[0-5][0-9]*'",
 				error: "Please enter a valid time."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1264,7 +1118,7 @@ Object.defineProperty(SQLite.prototype, "types", {
 				check: "UPPER(TYPEOF(new.%col)) NOT IN ('TEXT')",
 				error: "Enter a textual value."
 			},
-			notNull: {
+			noFREE.trigger.null: {
 				level: 1,
 				type: "boolean",
 				regex: null,
@@ -1358,7 +1212,6 @@ Object.defineProperty(SQLite.prototype, "types", {
 	}
 });
 
-/*configuration and default values*/
 Object.defineProperties(SQLite.prototype, {
 	nameFormat: {
 		value: /^[A-Z]([A-Z0-9\_]+)?$/i
@@ -1413,7 +1266,6 @@ Object.defineProperties(SQLite.prototype, {
 	}
 });
 
-/*Erros and checking*/
 Object.defineProperties(SQLite.prototype, {
 	errors: {
 		value: {
@@ -1554,7 +1406,7 @@ Object.defineProperties(SQLite.prototype, {
 		}
 	},
 	order: {
-		value: ["type", "unique", "notNull", "default", "min", "max", "glob", "notGlob", "like", "notLike", "table"]
+		value: ["type", "unique", "noFREE.trigger.null", "default", "min", "max", "glob", "notGlob", "like", "notLike", "table"]
 	},
 	getValue: {
 		value: function(t, c, a, msg) {
@@ -1742,50 +1594,7 @@ Object.defineProperties(SQLite.prototype, {
 					key1.push(c);
 				}
 			}
-				
-				
-			
-			
-			
-			
 		}
 	}
 
-});
-
-
-
-
-
-
-
-
-
-
-
-function p10(value) {
-	var val, num, int, flt, pow, dot;
-	val = value.toString().toLowerCase().split("e");
-	num = val[0].split(".");
-	pow = val[1] === undefined ? 0 : Number(val[1]);
-	int = num[0].replace(/[^0-9]/g, "").replace(/^0+/, "");
-	flt = num[1] === undefined ? "" : num[1].replace(/0+$/, "");
-	dot = flt.length;
-	num = pow < 0 ? -pow : pow;
-	for (var i = 0; i < num; i++) {
-		if (pow < 0) {
-			int = "0"+int;
-		} else {
-			flt = flt+"0";
-		}
-	}
-
-	console.log(int+flt);
-
-	
-	
-	
-	
-	
-}
-
+});*/

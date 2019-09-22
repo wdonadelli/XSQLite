@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<html lang='pt-br'>
+<html>
 <head>
-<title>SQLite Trigger Creator</title>
-<meta charset='utf-8'>
-<style>
-* {box-sizing: border-box;}
-</style>
-<script src="SQLite.js"></script>
-<script>
+	<title>XSQLite: Web Code Generator</title>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<meta name="keywords" content="sql, sqlite, xml">
+	<meta name="author" content="Willian Donadelli"/>
+	<meta name="description" content="XSQLite Object Web Code Generator. Enter the xml structure and get the SQLite structure."/>
+	<meta name="rating" content="general" />
+	<meta name="revisit-after" content="2 days" />
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+	<link  href="https://wdonadelli.github.io/wd/v2/wd.css" rel="stylesheet" />
+	<script src="https://wdonadelli.github.io/wd/v2/wd.js"></script>
+	<script src="XSQLite.js"></script>
+	<script>
 function start() {
 	try {
 		var x = XSQLite(document.getElementById("xml").value);
@@ -20,15 +26,29 @@ function start() {
 };
 
 window.addEventListener("load", start);
-
-</script>
+	</script>
 </head>
 
-<body style="margin: 0; padding: 10px;">
+<body class="wd-flyer">
 
-<h3>SQLite Trigger Creator</h3>
-<form>
-	<textarea id="xml" style="color: teal; width: 100%; height: 30%; padding: 0.5em;" >
+<header class="wd-head wd-box-black">
+	<h3>XSQLite: Web Code Generator</h3>
+</header>
+
+<nav class="wd-nav wd-buddy wd-box-opaque-out wd-box-white">
+	<a href="#" data-wd-action="tab{#tab_xml}" data-wd-click="">XML</a>
+	<a href="#" data-wd-action="tab{#tab_sql}" onclick="start();">SQL</a>
+</nav>
+
+<div class="wd-content">
+
+
+
+	<div>
+		<div id="tab_xml">
+
+			<form class="wd-vform wd-margin">
+				<textarea id="xml" class="wd-text-blue wd-input wd-radius" style="height: 400px">
 <sql>
 	<table name="table1">
 		<column name="cText" type="text" unique="true" null="true" min="5" max="10" default="WILLIAN DONADELLI" >
@@ -46,11 +66,17 @@ window.addEventListener("load", start);
 		<column name="cKeys" type="id" target="targetTable" />
 	</table>
 </sql>
-	</textarea>
-	<button id="result" type="button" onclick="start();" style="display: block;">Executar</button>
-</form>
+				</textarea>
+				<div class="wd-text-small wd-text-blue wd-input-help">Enter the XML code in the field above and click <q>SQL</q> to see the result.</div>
+			</form>
+		</div>
+		
+		<div id="tab_sql" class="wd-text-smaller">
 
-<pre id="sqlite" style="color: royalblue;" style="overflow: auto; height"></pre>
+			<pre id="sqlite" class="wd-code"></pre>
+		
+		</div>
+	</div>
 
 </body>
 </html>
