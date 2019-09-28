@@ -4,7 +4,6 @@ var XSQLite = (function() {
 	var CONFIG, FREE, NUMBER, TEXT, BOOLEAN, DATE, TIME, ID;
 
 	/*-- CONFIGURAÇÃO: tipos --*/
-
 	CONFIG = {};
 
 	CONFIG.free    = {};
@@ -24,7 +23,6 @@ var XSQLite = (function() {
 	ID      = CONFIG.id;
 
 	/*-- CONFIGURAÇÃO: produtos --*/
-
 	for (var type in CONFIG) {
 		CONFIG[type].value   = {};
 		CONFIG[type].column  = {};
@@ -32,234 +30,228 @@ var XSQLite = (function() {
 		CONFIG[type].trigger = {};
 	}
 
-	/*-- CONFIGURAÇÃO: valores --*/
-
-	/*-- free --*/
-	FREE.value = {};
-	FREE.value.unique  = function (val) {return val === null || val.toLowerCase() !== "true" ? null : true;}
-	FREE.value.null    = function (val) {return val === null || val.toLowerCase() !== "false" ? null : false;}
-	FREE.value.default = function (val) {return val !== null ? "'"+val+"'" : null;}
-	FREE.value.min     = FREE.value.default;
-	FREE.value.max     = FREE.value.default;
-	FREE.value.glob    = FREE.value.default;
-	FREE.value.like    = FREE.value.default;
-	/*-- number --*/
-	NUMBER.value = {};
-	NUMBER.value.unique  = FREE.value.unique;
-	NUMBER.value.null    = FREE.value.null;
-	NUMBER.value.default = function (val) {return !isNaN(val) ? val : null;}
-	NUMBER.value.min     = NUMBER.value.default;
-	NUMBER.value.max     = NUMBER.value.default;
-	/*-- text --*/
-	TEXT.value = {};
-	TEXT.value.unique  = FREE.value.unique;
-	TEXT.value.null    = FREE.value.null;
-	TEXT.value.default = function (val) {return val !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/i).test(val) ? "'"+val+"'" : null;}
-	TEXT.value.min     = function (val) {return val !== null && (/^[1-9]([0-9]+)?$/).test(val) ? val : null;}
-	TEXT.value.max     = TEXT.value.min;
-	/*-- boolean --*/
-	CONFIG.boolean.value = {};
-	CONFIG.boolean.value.null    = FREE.value.null;
-	CONFIG.boolean.value.default = function (val) {return val !== null && (/^[01]?$/).test(val) ? val : null;}
-	/*-- date --*/
-	DATE.value = {};
-	DATE.value.unique  = FREE.value.unique;
-	DATE.value.null    = FREE.value.null;
-	DATE.value.default = function (val) {
-		if ((/^[0-9]{4}(\-[0-9]{2}){2}$/).test(val)) {
-			val = "'"+val+"'"
-		} else if ((/^DATE\(.*\)$/).test(val)) {
-			val = val;
-		} else {
-			val = null;
-		}
-		return val;
-	}
-	DATE.value.min     = DATE.value.default;
-	DATE.value.max     = DATE.value.default;
-	/*-- time --*/
-	TIME.value = {};
-	TIME.value.unique  = FREE.value.unique;
-	TIME.value.null    = FREE.value.null;
-	TIME.value.default = function (val) {
-		if ((/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/).test(val)) {
-			val = "'"+val+"'"
-		} else if ((/^TIME\(.*\)$/).test(val)) {
-			val = val;
-		} else {
-			val = null;
-		}
-		return val;
-	}
-	TIME.value.min     = TIME.value.default;
-	TIME.value.max     = TIME.value.default;
-	/*-- id --*/
-	ID.value = {};
-	ID.value.target = aname;
+	/*-- CONFIGURAÇÃO: valores (métodos) --*/
+	FREE.value = {
+		unique:  function (val) {return val === null || val.toLowerCase() !== "true" ? null : true;},
+		null:    function (val) {return val === null || val.toLowerCase() !== "false" ? null : false;},
+		default: function (val) {return val !== null ? "'"+val+"'" : null;},
+		min:     function (val) {return this.default;},
+		max:     function (val) {return this.default;},
+		glob:    function (val) {return this.default;},
+		like:    function (val) {return this.default;}
+	};
+	NUMBER.value = {
+		unique:  FREE.value.unique,
+		null:    FREE.value.null,
+		default: function (val) {return !isNaN(val) ? val : null;},
+		min:     function (val) {return this.default;},
+		max:     function (val) {return this.default;}
+	};
+	TEXT.value = {
+		unique:  FREE.value.unique,
+		null:    FREE.value.null,
+		default: function (val) {return val !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/i).test(val) ? "'"+val+"'" : null;},
+		min:     function (val) {return val !== null && (/^[1-9]([0-9]+)?$/).test(val) ? val : null;},
+		max:     function (val) {return this.min;}
+	};
+	BOOLEAN.value = {
+		null:    FREE.value.null,
+		default: function (val) {return val !== null && (/^[01]?$/).test(val) ? val : null;}
+	};
+	DATE.value = {
+		unique:  FREE.value.unique,
+		null:    FREE.value.null,
+		default: function (val) {
+			if ((/^[0-9]{4}(\-[0-9]{2}){2}$/).test(val)) {
+				val = "'"+val+"'"
+			} else if ((/^DATE\(.*\)$/).test(val)) {
+				val = val;
+			} else {
+				val = null;
+			}
+			return val;
+		},
+		min:     DATE.value.default,
+		max:     DATE.value.default
+	};
+	TIME.value = {
+		unique:  FREE.value.unique,
+		null:    FREE.value.null,
+		default: function (val) {
+			if ((/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/).test(val)) {
+				val = "'"+val+"'"
+			} else if ((/^TIME\(.*\)$/).test(val)) {
+				val = val;
+			} else {
+				val = null;
+			}
+			return val;
+		},
+		min:     TIME.value.default,
+		max:     TIME.value.default
+	};
+	ID.value = {
+		target: aname
+	};
 
 	/*-- CONFIGURAÇÃO: colunas --*/
-
-	/*-- free --*/
-	FREE.column = {};
-	FREE.column.type    = function (val) {return swap("@col@ TEXT", val);}
-	FREE.column.unique  = function (val) {return "UNIQUE";}
-	FREE.column.null    = function (val) {return "NOT NULL";}
-	FREE.column.default = function (val) {return swap("DEFAULT(@default@)", val);}
-	/*-- number --*/
-	NUMBER.column = {};
-	NUMBER.column.type    = function(val) {return swap("@col@ NUMBER", val);}
-	NUMBER.column.unique  = FREE.column.unique;
-	NUMBER.column.null    = FREE.column.null;
-	NUMBER.column.default = FREE.column.default;
-	/*-- text --*/
-	TEXT.column = {};
-	TEXT.column.type    = FREE.column.type;
-	TEXT.column.unique  = FREE.column.unique;
-	TEXT.column.null    = FREE.column.null;
-	TEXT.column.default = FREE.column.default;
-	/*-- boolean --*/
-	CONFIG.boolean.column = {};
-	CONFIG.boolean.column.type    = function(val) {return swap("@col@ INTEGER", val);}
-	CONFIG.boolean.column.null    = FREE.column.null;
-	CONFIG.boolean.column.default = FREE.column.default;
-	/*-- date --*/
-	DATE.column = {};
-	DATE.column.type    = FREE.column.type;
-	DATE.column.unique  = FREE.column.unique;
-	DATE.column.null    = FREE.column.null;
-	DATE.column.default = FREE.column.default;
-	/*-- time --*/
-	TIME.column = {};
-	TIME.column.type    = FREE.column.type;
-	TIME.column.unique  = FREE.column.unique;
-	TIME.column.null    = FREE.column.null;
-	TIME.column.default = FREE.column.default;
-	/*-- id --*/
-	ID.column = {};
-	ID.column.type = CONFIG.boolean.column.type;
+	FREE.column = {
+		type:    "@col@ TEXT",
+		unique:  "UNIQUE",
+		null:    "NOT NULL",
+		default: "DEFAULT(@default@)"
+	};
+	NUMBER.column = {
+		type:    "@col@ NUMBER",
+		unique:  FREE.column.unique,
+		null:    FREE.column.null,
+		default: FREE.column.default
+	};
+	TEXT.column = {
+		type:    FREE.column.type,
+		unique:  FREE.column.unique,
+		null:    FREE.column.null,
+		default: FREE.column.default
+	};
+	BOOLEAN.column = {
+		type:    "@col@ INTEGER",
+		null:    FREE.column.null,
+		default: FREE.column.default
+	};
+	DATE.column = {
+		type:    FREE.column.type,
+		unique:  FREE.column.unique,
+		null:    FREE.column.null,
+		default: FREE.column.default
+	};
+	TIME.column = {
+		type:    FREE.column.type,
+		unique:  FREE.column.unique,
+		null:    FREE.column.null,
+		default: FREE.column.default
+	};
+	ID.column = {
+		type: BOOLEAN.column.type
+	};
 
 	/*-- CONFIGURAÇÃO: chave estrangeira --*/
-	
-	/*-- id --*/
-	ID.foreign = {};
-	ID.foreign.key =  function(val) {return swap("FOREIGN KEY(@col@) REFERENCES @target@(_id_) ON UPDATE CASCADE", val);}
+	ID.foreign = {
+		key: "FOREIGN KEY(@col@) REFERENCES @target@(_id_) ON UPDATE CASCADE"
+	};
 
 	/*-- CONFIGURAÇÃO: gatilhos INSERT/UPDATE BEFORE --*/
-
-	/*-- free --*/
-	FREE.trigger = {};
-	FREE.trigger.unique = function (val) {return swap("((SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0)", val);}
-	FREE.trigger.null   = function (val) {return swap("(new.@col@ IS NULL OR TRIM(new.@col@) = '')", val);}
-	FREE.trigger.min    = function (val) {return swap("(new.@col@ < @min@)", val);}
-	FREE.trigger.max    = function (val) {return swap("(new.@col@ > @max@)", val);}
-	FREE.trigger.glob   = function (val) {return swap("(new.@col@ NOT GLOB @glob@)", val);}
-	FREE.trigger.like   = function (val) {return swap("(new.@col@ NOT LIKE @like@)", val);}
-	/*-- number --*/
-	NUMBER.trigger = {};
-	NUMBER.trigger.type   = function(val) {return swap("(UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL'))", val);}
-	NUMBER.trigger.unique = FREE.trigger.unique
-	NUMBER.trigger.null   = FREE.trigger.null
-	NUMBER.trigger.min    = FREE.trigger.min
-	NUMBER.trigger.max    = FREE.trigger.max
-	/*-- text --*/
-	TEXT.trigger = {};
-	TEXT.trigger.type   = function(val) {return swap("(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *')", val);}
-	TEXT.trigger.unique = function (val) {return swap("((SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0)", val);}
-	TEXT.trigger.null   = FREE.trigger.null;
-	TEXT.trigger.min    = function(val) {return swap("(LENGTH(new.@col@) < @min@)", val);}
-	TEXT.trigger.max    = function(val) {return swap("(LENGTH(new.@col@) > @max@)", val);}
-	/*-- boolean --*/
-	CONFIG.boolean.trigger = {};
-	CONFIG.boolean.trigger.type = function(val) {return swap("(new.@col@ NOT IN (0,1))", val);}
-	CONFIG.boolean.trigger.null = FREE.trigger.null;
-	/*-- date --*/
-	DATE.trigger = {};
-	DATE.trigger.type   = function(val) {return swap("(DATE(new.@col@, '+1 day', '-1 day') != new.@col@)", val);}
-	DATE.trigger.unique = FREE.trigger.unique;
-	DATE.trigger.null   = FREE.trigger.null;
-	DATE.trigger.min    = FREE.trigger.min;
-	DATE.trigger.max    = FREE.trigger.max;
-	/*-- time --*/
-	TIME.trigger = {};
-	TIME.trigger.type   = function(val) {return swap("(TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*')", val);}
-	TIME.trigger.unique = FREE.trigger.unique;
-	TIME.trigger.null   = FREE.trigger.null;
-	TIME.trigger.min    = FREE.trigger.min;
-	TIME.trigger.max    = FREE.trigger.max;
-	/*-- id --*/
-	ID.trigger = {};
-	ID.trigger.type = function(val) {return swap("(new.@col@ IS NULL) OR ((SELECT COUNT(*) FROM @target@ WHERE _id_ = new.@col@) != 1)", val);}
+	FREE.trigger = {
+		unique: "((SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0)",
+		null:   "(new.@col@ IS NULL OR TRIM(new.@col@) = '')",
+		min:    "(new.@col@ < @min@)",
+		max:    "(new.@col@ > @max@)",
+		glob:   "(new.@col@ NOT GLOB @glob@)",
+		like:   "(new.@col@ NOT LIKE @like@)"
+	};
+	NUMBER.trigger = {
+		type:   "(UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL'))",
+		unique: FREE.trigger.unique,
+		null:   FREE.trigger.null,
+		min:    FREE.trigger.min,
+		max:    FREE.trigger.max
+	};
+	TEXT.trigger = {
+		type:   "(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *')",
+		unique: "((SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0)",
+		null:   FREE.trigger.null,
+		min:    "(LENGTH(new.@col@) < @min@)",
+		max:    "(LENGTH(new.@col@) > @max@)"
+	};
+	BOOLEAN.trigger = {
+		type: "(new.@col@ NOT IN (0,1))",
+		null: FREE.trigger.null
+	};
+	DATE.trigger = {
+		type:   "(DATE(new.@col@, '+1 day', '-1 day') != new.@col@)",
+		unique: FREE.trigger.unique,
+		null:   FREE.trigger.null,
+		min:    FREE.trigger.min,
+		max:    FREE.trigger.max
+	};
+	TIME.trigger = {
+		type:   "(TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*')",
+		unique: FREE.trigger.unique,
+		null:   FREE.trigger.null,
+		min:    FREE.trigger.min,
+		max:    FREE.trigger.max
+	};
+	ID.trigger = {
+		type: "(new.@col@ IS NULL) OR ((SELECT COUNT(*) FROM @target@ WHERE _id_ = new.@col@) != 1)"
+	};
 
 	/*-- CONFIGURAÇÃO: menssages --*/
-
-	/*-- free --*/
-	FREE.message = {};
-	FREE.message.type   = function (val) {return swap("@col@: Enter a textual value", val);}
-	FREE.message.unique = function (val) {return swap("@col@: Existing registration.", val);}
-	FREE.message.null   = function (val) {return swap("@col@: Required value.", val);}
-	FREE.message.min    = function (val) {return swap("@col@: Value less than allowed.", val);}
-	FREE.message.max    = function (val) {return swap("@col@: Greater than allowed value.", val);}
-	FREE.message.glob   = function (val) {return swap("@col@: Value in the wrong format.", val);}
-	FREE.message.like   = FREE.message.glob;
-	/*-- number --*/
-	NUMBER.message = {};
-	NUMBER.message.type   = function(val) {return swap("@col@: The value must be numeric.", val);}
-	NUMBER.message.unique = FREE.message.unique;
-	NUMBER.message.null   = FREE.message.null;
-	NUMBER.message.min    = FREE.message.min;
-	NUMBER.message.max    = FREE.message.min;
-	/*-- text --*/
-	TEXT.message = {};
-	TEXT.message.type   = function(val) {return swap("@col@: Enter only letters and simple spaces.", val);}
-	TEXT.message.unique = FREE.message.unique;
-	TEXT.message.null   = FREE.message.null;
-	TEXT.message.min    =  function(val) {return swap("@col@: Amount of characters less than allowed.", val);}
-	TEXT.message.max    =  function(val) {return swap("@col@: Amount of characters greater than allowed.", val);}
-	/*-- boolean --*/
-	CONFIG.boolean.message = {}
-	CONFIG.boolean.message.type = function(val) {return swap("@col@: The value must be boolean (1 or 0).", val);}
-	CONFIG.boolean.message.null = FREE.message.null;
-	/*-- date --*/
-	DATE.message = {};
-	DATE.message.type   = function(val) {return swap("@col@: Enter a valid date.", val);}
-	DATE.message.unique = FREE.message.unique;
-	DATE.message.null   = FREE.message.null;
-	DATE.message.min    = FREE.message.min;
-	DATE.message.max    = FREE.message.min;
-	/*-- time --*/
-	TIME.message = {};
-	TIME.message.type   = function(val) {return swap("@col@: Enter a valid time.", val);}
-	TIME.message.unique = FREE.message.unique;
-	TIME.message.null   = FREE.message.null;
-	TIME.message.min    = FREE.message.min;
-	TIME.message.max    = FREE.message.min;
-	/*-- id --*/
-	ID.message = {};
-	ID.message.type = function(val) {return swap("@col@: Register not found in table "+val.target+".", val);}
+	FREE.message = {
+		type:   "@col@: Enter a textual value",
+		unique: "@col@: Existing registration.",
+		null:   "@col@: Required value.",
+		min:    "@col@: Value less than allowed.",
+		max:    "@col@: Greater than allowed value.",
+		glob:   "@col@: Value in the wrong format.",
+		like:   "@col@: Value in the wrong format."
+	};
+	NUMBER.message = {
+		type:   "@col@: The value must be numeric.",
+		unique: FREE.message.unique,
+		null:   FREE.message.null,
+		min:    FREE.message.min,
+		max:    FREE.message.min
+	};
+	TEXT.message = {
+		type:   "@col@: Enter only letters and simple spaces.",
+		unique: FREE.message.unique,
+		null:   FREE.message.null,
+		min:    "@col@: Amount of characters less than allowed.",
+		max:    "@col@: Amount of characters greater than allowed."
+	};
+	BOOLEAN.message = {
+		type: "@col@: The value must be boolean (1 or 0).",
+		null: FREE.message.null
+	};
+	DATE.message = {
+		type:   "@col@: Enter a valid date.",
+		unique: FREE.message.unique,
+		null:   FREE.message.null,
+		min:    FREE.message.min,
+		max:    FREE.message.min
+	};
+	TIME.message = {
+		type:   "@col@: Enter a valid time.",
+		unique: FREE.message.unique,
+		null:   FREE.message.null,
+		min:    FREE.message.min,
+		max:    FREE.message.min
+	};
+	ID.message = {
+		type: "@col@: Register not found in table @target@"
+	};
 
 	/*-- CONFIGURAÇÃO: INSERT LOG --*/ //FIXME: precisa disso? para que serve?
-
-	/*-- free --*/
-	FREE.log = {};
-		FREE.log.type = function(val) {return "TRIM(@col@)";}
-	/*-- number --*/
-	NUMBER.log = {};
-	NUMBER.log.type = function(val) {return "ABS(new.@col@) <> 0 OR new.@col@ = 0 THEN CAST(new.%col AS REAL) ELSE new.%col"+val.name;}
-	/*-- text --*/
-	TEXT.log = {};
-	TEXT.log.type = function(val) {return "WHEN TRIM(new.@col@) = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new.@col@)), '  ', ' ')";}
-	/*-- boolean --*/
-	CONFIG.boolean.log = {};
-	CONFIG.boolean.log.type = function(val) {return "UPPER(new.@col@) IN ('TRUE', '1') THEN 1 WHEN UPPER(new.@col@l) IN ('FALSE', '0') THEN 0 ELSE new."+val.name;}
-	/*-- date --*/
-	DATE.log = {};
-	DATE.log.type = function(val) {return "TRIM(@col@)";}
-	/*-- time --*/
-	TIME.log = {};
-	TIME.log.type = function(val) {return "TRIM(@col@)";}
-	/*-- id --*/
-	ID.log = {};
-	ID.logtype = function(val) {return "TRIM(@col@)";}
+	FREE.log = {
+			type: "TRIM(@col@)"
+	};
+	NUMBER.log = {
+		type: "ABS(new.@col@) <> 0 OR new.@col@ = 0 THEN CAST(new.%col AS REAL) ELSE new.@col@"
+	};
+	TEXT.log = {
+		type: "WHEN TRIM(new.@col@) = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new.@col@)), '  ', ' ')"
+	};
+	BOOLEAN.log = {
+		type: "UPPER(new.@col@) IN ('TRUE', '1') THEN 1 WHEN UPPER(new.@col@l) IN ('FALSE', '0') THEN 0 ELSE new.@col@"
+	};
+	DATE.log = {
+		type: "TRIM(@col@)"
+	};
+	TIME.log = {
+		type: "TRIM(@col@)"
+	};
+	ID.log = {
+		type: "TRIM(@col@)"
+	};
 
 
 
@@ -324,11 +316,11 @@ var XSQLite = (function() {
 		/*-- Looping nos produtos (exceto value) --*/
 		for (var key in CONFIG[ctype]) {
 			if (key !== "value") {
-				obj[key] = {col: cname, tab: tname};
+				obj[key] = {};
 				/*-- Definindo informações sobre cada produto (quando value não for nulo) --*/
 				for (var att in CONFIG[ctype][key]) {
 					if (obj.value[att] !== null) {
-						value = CONFIG[ctype][key][att](obj.value);
+						value = swap(CONFIG[ctype][key][att], obj.value);
 						if (key === "message" && xml.getElementsByTagName(att).length > 0) {
 							value = xml.getElementsByTagName(att)[0].childNodes[0].nodeValue;
 						}
