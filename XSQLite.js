@@ -32,8 +32,8 @@ var XSQLite = (function() {
 
 	/*-- CONFIGURAÇÃO: valores (métodos) --*/
 	FREE.value = {
-		unique:  function (val) {return val === null || val.toLowerCase() !== "true" ? null : true;},
-		null:    function (val) {return val === null || val.toLowerCase() !== "false" ? null : false;},
+		unique:  function (val) {return val === null ? null : "unique";},
+		null:    function (val) {return val === null ? "not null" : null;},
 		default: function (val) {return val !== null ? "'"+val+"'" : null;},
 		min:     function (val) {return this.default;},
 		max:     function (val) {return this.default;},
@@ -141,47 +141,47 @@ var XSQLite = (function() {
 
 	/*-- CONFIGURAÇÃO: gatilhos INSERT/UPDATE BEFORE --*/
 	FREE.trigger = {
-		unique: "((SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0)",
-		null:   "(new.@col@ IS NULL OR TRIM(new.@col@) = '')",
-		min:    "(new.@col@ < @min@)",
-		max:    "(new.@col@ > @max@)",
-		glob:   "(new.@col@ NOT GLOB @glob@)",
-		like:   "(new.@col@ NOT LIKE @like@)"
+		unique: "(SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0",
+		null:   "new.@col@ IS NULL OR TRIM(new.@col@) = ''",
+		min:    "new.@col@ < @min@",
+		max:    "new.@col@ > @max@",
+		glob:   "new.@col@ NOT GLOB @glob@",
+		like:   "new.@col@ NOT LIKE @like@"
 	};
 	NUMBER.trigger = {
-		type:   "(UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL'))",
+		type:   "UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL')",
 		unique: FREE.trigger.unique,
 		null:   FREE.trigger.null,
 		min:    FREE.trigger.min,
 		max:    FREE.trigger.max
 	};
 	TEXT.trigger = {
-		type:   "(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *')",
-		unique: "((SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0)",
+		type:   "UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *'",
+		unique: "(SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0",
 		null:   FREE.trigger.null,
-		min:    "(LENGTH(new.@col@) < @min@)",
-		max:    "(LENGTH(new.@col@) > @max@)"
+		min:    "LENGTH(new.@col@) < @min@",
+		max:    "LENGTH(new.@col@) > @max@"
 	};
 	BOOLEAN.trigger = {
-		type: "(new.@col@ NOT IN (0,1))",
+		type: "new.@col@ NOT IN (0,1)",
 		null: FREE.trigger.null
 	};
 	DATE.trigger = {
-		type:   "(DATE(new.@col@, '+1 day', '-1 day') != new.@col@)",
+		type:   "DATE(new.@col@, '+1 day', '-1 day') != new.@col@",
 		unique: FREE.trigger.unique,
 		null:   FREE.trigger.null,
 		min:    FREE.trigger.min,
 		max:    FREE.trigger.max
 	};
 	TIME.trigger = {
-		type:   "(TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*')",
+		type:   "TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*'",
 		unique: FREE.trigger.unique,
 		null:   FREE.trigger.null,
 		min:    FREE.trigger.min,
 		max:    FREE.trigger.max
 	};
 	ID.trigger = {
-		type: "(new.@col@ IS NULL) OR ((SELECT COUNT(*) FROM @target@ WHERE _id_ = new.@col@) != 1)"
+		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @target@ WHERE _id_ = new.@col@) != 1"
 	};
 
 	/*-- CONFIGURAÇÃO: menssages --*/
@@ -480,53 +480,45 @@ var XSQLite = (function() {
 	}
 
 	/*-- SQL COLUMN --*/
-
 	function createColumn(col) {
 		var sql, seq;
 		sql = [];
-		/*-- setting attribute sequence --*/
 		seq = ["type", "unique", "null", "default"];
-		/*-- looping in attributes --*/
 		for (var i = 0; i < seq.length; i++) {
-			/*-- adding values --*/
 			if (seq[i] in col) {
 				sql.push(col[seq[i]]);
 			}
 		}
-		/*-- finishing column --*/
 		return sql.join(" ");
 	};
 
 	/*-- SQL TABLE --*/
-
 	function createTable(tab) {
 		var sql, cols, keys, col, child;
-		sql   = [];
-		cols  = [];
-		keys  = [];
-		child = tab.getElementsByTagName("column");
-		/*-- starting table --*/
+		sql  = [];
+		cols = [];
+		keys = [];
+		/*-- iniciando tabela --*/
 		sql.push("CREATE TABLE IF NOT EXISTS "+tab.getAttribute("name")+" (");
-		/*-- adding id column --*/
+		/*-- adicionando coluna id --*/
 		cols.push("_id_ INTEGER PRIMARY KEY AUTOINCREMENT");
-		/*-- looping in columns --*/
+		/*-- looping nas colunas --*/
+		child = tab.getElementsByTagName("column");
 		for (var i = 0; i < child.length; i++) {
-			/*-- getting data column --*/
+			/*-- obtendo dados da colunas --*/
 			col = attr(child[i]);
-			/*-- creating column --*/
 			cols.push(createColumn(col.column));
-			/*-- creating foreign keys --*/
+			/*-- chave estrangeira --*/
 			if ("foreign" in col) {
 				keys.push(col.foreign.key);
 			}
 		}
-		/*-- adding foreign keys to columns --*/
+		/*-- transferindo as chaves estrangeiras para as colunas --*/
 		for (var k = 0; k < keys.length; k++) {
 			cols.push(keys[k]);
 		}
-		/*-- adding columns to table --*/
+		/*-- adicionando colunas à tabela --*/
 		sql.push("\t"+cols.join(",\n\t"));
-		/*-- finishing table --*/
 		sql.push(");");
 		return sql.join("\n");
 	};
