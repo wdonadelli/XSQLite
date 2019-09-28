@@ -163,7 +163,7 @@ var XSQLite = (function() {
 	NUMBER.trigger.max    = FREE.trigger.max
 	/*-- text --*/
 	TEXT.trigger = {};
-	TEXT.trigger.type   = function(val) {return swap("(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *' ", val);}
+	TEXT.trigger.type   = function(val) {return swap("(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *')", val);}
 	TEXT.trigger.unique = function (val) {return swap("((SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0)", val);}
 	TEXT.trigger.null   = FREE.trigger.null;
 	TEXT.trigger.min    = function(val) {return swap("(LENGTH(new.@col@) < @min@)", val);}
@@ -415,7 +415,7 @@ var XSQLite = (function() {
 			} else {
 				tname.push(val);
 			}
-			if (FREE.value.name(val) === null) {
+			if (FREE.value.col(val) === null) {
 				log.push({tab: tab, col: "-", attr: "name", val: val, msg: errors.name});
 			}
 			/*-- CHECKING COLUMN TAG --*/
@@ -434,7 +434,7 @@ var XSQLite = (function() {
 				} else {
 					cname.push(val);
 				}
-				if (FREE.value.name(val) === null) {
+				if (FREE.value.col(val) === null) {
 					log.push({tab: tab, col: col, attr: "name", val: val, msg: errors.name});
 				}
 				/*-- CHECKING ATTRIBUTES COLUMN TAG --*/
@@ -550,7 +550,7 @@ var XSQLite = (function() {
 		sql.push("CREATE VIEW IF NOT EXISTS vw_"+tab.getAttribute("name")+" AS SELECT ");
 		/*-- looping in columns --*/
 		for (var i = 0; i < child.length; i++) {
-			col.push(attr(child[i]).value.name);
+			col.push(attr(child[i]).value.col);
 		}
 		/*-- adding columns to view --*/
 		sql.push("\t"+col.join(",\n\t"));
@@ -601,7 +601,7 @@ var XSQLite = (function() {
 			/*-- adding values --*/
 			if (seq[i] in col.trigger) {
 				if ("null" in col.value && col.value.null !== false) {
-					sql.push("\t\tWHEN (new."+col.value.name+" IS NOT NULL) AND "+col.trigger[seq[i]]+" THEN");
+					sql.push("\t\tWHEN (new."+col.value.col+" IS NOT NULL) AND "+col.trigger[seq[i]]+" THEN");
 				} else {
 					sql.push("\t\tWHEN "+col.trigger[seq[i]]+" THEN");
 				}
@@ -670,11 +670,11 @@ var XSQLite = (function() {
 		/*-- looping in columns --*/
 		child = tab.getElementsByTagName("column");
 		for (var i = 0; i < child.length; i++) {
-			col.push(attr(child[i]).value.name);
+			col.push(attr(child[i]).value.col);
 			if (type === "DELETE") {
 				val.push("NULL");
 			} else {
-				val.push("new."+attr(child[i]).value.name);
+				val.push("new."+attr(child[i]).value.col);
 			}
 		}
 		/*-- adding columns to insert --*/
