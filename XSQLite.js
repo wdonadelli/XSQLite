@@ -36,8 +36,6 @@ var XSQLite = (function() {
 
 	/*-- free --*/
 	FREE.value = {};
-	FREE.value.name    = function (val) {return val !== null && (/^[A-Z]([A-Z0-9\_]+)?$/i).test(val) ? val : null;}
-	FREE.value.type    = function (val) {return val !== null && val in CONFIG ? val : "free";}
 	FREE.value.unique  = function (val) {return val === null || val.toLowerCase() !== "true" ? null : true;}
 	FREE.value.null    = function (val) {return val === null || val.toLowerCase() !== "false" ? null : false;}
 	FREE.value.default = function (val) {return val !== null ? "'"+val+"'" : null;}
@@ -47,8 +45,6 @@ var XSQLite = (function() {
 	FREE.value.like    = FREE.value.default;
 	/*-- number --*/
 	NUMBER.value = {};
-	NUMBER.value.name    = FREE.value.name;
-	NUMBER.value.type    = FREE.value.type;
 	NUMBER.value.unique  = FREE.value.unique;
 	NUMBER.value.null    = FREE.value.null;
 	NUMBER.value.default = function (val) {return !isNaN(val) ? val : null;}
@@ -56,23 +52,17 @@ var XSQLite = (function() {
 	NUMBER.value.max     = NUMBER.value.default;
 	/*-- text --*/
 	TEXT.value = {};
-	TEXT.value.name    = FREE.value.name;
-	TEXT.value.type    = FREE.value.type;
 	TEXT.value.unique  = FREE.value.unique;
 	TEXT.value.null    = FREE.value.null;
-	TEXT.value.default = function (val) {return val !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/).test(val) ? "'"+val+"'" : null;}
+	TEXT.value.default = function (val) {return val !== null && (/^[A-Z]+((\ [A-Z]+)+)?$/i).test(val) ? "'"+val+"'" : null;}
 	TEXT.value.min     = function (val) {return val !== null && (/^[1-9]([0-9]+)?$/).test(val) ? val : null;}
 	TEXT.value.max     = TEXT.value.min;
 	/*-- boolean --*/
 	CONFIG.boolean.value = {};
-	CONFIG.boolean.value.name    = FREE.value.name;
-	CONFIG.boolean.value.type    = FREE.value.type;
 	CONFIG.boolean.value.null    = FREE.value.null;
 	CONFIG.boolean.value.default = function (val) {return val !== null && (/^[01]?$/).test(val) ? val : null;}
 	/*-- date --*/
 	DATE.value = {};
-	DATE.value.name    = FREE.value.name;
-	DATE.value.type    = FREE.value.type;
 	DATE.value.unique  = FREE.value.unique;
 	DATE.value.null    = FREE.value.null;
 	DATE.value.default = function (val) {
@@ -89,8 +79,6 @@ var XSQLite = (function() {
 	DATE.value.max     = DATE.value.default;
 	/*-- time --*/
 	TIME.value = {};
-	TIME.value.name    = FREE.value.name;
-	TIME.value.type    = FREE.value.type;
 	TIME.value.unique  = FREE.value.unique;
 	TIME.value.null    = FREE.value.null;
 	TIME.value.default = function (val) {
@@ -107,21 +95,19 @@ var XSQLite = (function() {
 	TIME.value.max     = TIME.value.default;
 	/*-- id --*/
 	ID.value = {};
-	ID.value.name   = FREE.value.name;
-	ID.value.type   = FREE.value.type;
-	ID.value.target = FREE.value.name;
+	ID.value.target = aname;
 
 	/*-- CONFIGURAÇÃO: colunas --*/
 
 	/*-- free --*/
 	FREE.column = {};
-	FREE.column.type    = function (val) {return val.name+" TEXT";}
+	FREE.column.type    = function (val) {return swap("@col@ TEXT", val);}
 	FREE.column.unique  = function (val) {return "UNIQUE";}
 	FREE.column.null    = function (val) {return "NOT NULL";}
-	FREE.column.default = function (val) {return "DEFAULT("+val.default+")";}
+	FREE.column.default = function (val) {return swap("DEFAULT(@default@)", val);}
 	/*-- number --*/
 	NUMBER.column = {};
-	NUMBER.column.type    = function(val) {return val.name+" NUMBER";}
+	NUMBER.column.type    = function(val) {return swap("@col@ NUMBER", val);}
 	NUMBER.column.unique  = FREE.column.unique;
 	NUMBER.column.null    = FREE.column.null;
 	NUMBER.column.default = FREE.column.default;
@@ -133,7 +119,7 @@ var XSQLite = (function() {
 	TEXT.column.default = FREE.column.default;
 	/*-- boolean --*/
 	CONFIG.boolean.column = {};
-	CONFIG.boolean.column.type    = function(val) {return val.name+" INTEGER";}
+	CONFIG.boolean.column.type    = function(val) {return swap("@col@ INTEGER", val);}
 	CONFIG.boolean.column.null    = FREE.column.null;
 	CONFIG.boolean.column.default = FREE.column.default;
 	/*-- date --*/
@@ -156,164 +142,236 @@ var XSQLite = (function() {
 	
 	/*-- id --*/
 	ID.foreign = {};
-	ID.foreign.key =  function(val) {return "FOREIGN KEY("+val.name+") REFERENCES "+val.target+"(_id_) ON UPDATE CASCADE";}
+	ID.foreign.key =  function(val) {return swap("FOREIGN KEY(@col@) REFERENCES @target@(_id_) ON UPDATE CASCADE", val);}
 
 	/*-- CONFIGURAÇÃO: gatilhos INSERT/UPDATE BEFORE --*/
 
 	/*-- free --*/
 	FREE.trigger = {};
-	FREE.trigger.unique = function (val) {return "((SELECT COUNT(*) FROM "+val.tab+" WHERE "+val.name+" = new."+val.name+") > 0)";}
-	FREE.trigger.null   = function (val) {return "(new."+val.name+" IS NULL OR TRIM(new."+val.name+") = '')";}
-	FREE.trigger.min    = function (val) {return "(new."+val.name+" < "+val.min+")";}
-	FREE.trigger.max    = function (val) {return "(new."+val.name+" > "+val.max+")";}
-	FREE.trigger.glob   = function (val) {return "(new."+val.name+" NOT GLOB "+val.glob+")";}
-	FREE.trigger.like   = function (val) {return "(new."+val.name+" NOT LIKE "+val.like+")";}
+	FREE.trigger.unique = function (val) {return swap("((SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0)", val);}
+	FREE.trigger.null   = function (val) {return swap("(new.@col@ IS NULL OR TRIM(new.@col@) = '')", val);}
+	FREE.trigger.min    = function (val) {return swap("(new.@col@ < @min@)", val);}
+	FREE.trigger.max    = function (val) {return swap("(new.@col@ > @max@)", val);}
+	FREE.trigger.glob   = function (val) {return swap("(new.@col@ NOT GLOB @glob@)", val);}
+	FREE.trigger.like   = function (val) {return swap("(new.@col@ NOT LIKE @like@)", val);}
 	/*-- number --*/
 	NUMBER.trigger = {};
-	NUMBER.trigger.type   = function(val) {return "(UPPER(TYPEOF(new."+val.name+")) NOT IN ('NUMERIC', 'INTEGER', 'REAL'))";}
+	NUMBER.trigger.type   = function(val) {return swap("(UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL'))", val);}
 	NUMBER.trigger.unique = FREE.trigger.unique
 	NUMBER.trigger.null   = FREE.trigger.null
 	NUMBER.trigger.min    = FREE.trigger.min
 	NUMBER.trigger.max    = FREE.trigger.max
 	/*-- text --*/
 	TEXT.trigger = {};
-	TEXT.trigger.type   = function(val) {
-		var sql;
-		sql  = "(UPPER(new."+val.name+") GLOB '*[^A-Z ]*' ";
-		sql += "OR REPLACE(TRIM(new."+val.name+"), '  ', ' ') != new."+val.name+" ";
-		sql += "OR TRIM(new."+val.name+") = '')";
-		return sql;
-	},
-	TEXT.trigger.unique = function (val) {return "((SELECT COUNT(*) FROM "+val.tab+" WHERE UPPER("+val.name+") = UPPER(new."+val.name+")) > 0)";}
+	TEXT.trigger.type   = function(val) {return swap("(UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *' ", val);}
+	TEXT.trigger.unique = function (val) {return swap("((SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0)", val);}
 	TEXT.trigger.null   = FREE.trigger.null;
-	TEXT.trigger.min    = function(val) {return "(LENGTH(new."+val.name+") < "+val.min+")";}
-	TEXT.trigger.max    = function(val) {return "(LENGTH(new."+val.name+") > "+val.max+")";}
+	TEXT.trigger.min    = function(val) {return swap("(LENGTH(new.@col@) < @min@)", val);}
+	TEXT.trigger.max    = function(val) {return swap("(LENGTH(new.@col@) > @max@)", val);}
 	/*-- boolean --*/
 	CONFIG.boolean.trigger = {};
-	CONFIG.boolean.trigger.type = function(val) {return "(new."+val.name+" NOT IN (0,1))";}
+	CONFIG.boolean.trigger.type = function(val) {return swap("(new.@col@ NOT IN (0,1))", val);}
 	CONFIG.boolean.trigger.null = FREE.trigger.null;
 	/*-- date --*/
 	DATE.trigger = {};
-	DATE.trigger.type   = function(val) {return "(DATE(new."+val.name+", '+1 day', '-1 day') != new."+val.name+")";}
+	DATE.trigger.type   = function(val) {return swap("(DATE(new.@col@, '+1 day', '-1 day') != new.@col@)", val);}
 	DATE.trigger.unique = FREE.trigger.unique;
 	DATE.trigger.null   = FREE.trigger.null;
 	DATE.trigger.min    = FREE.trigger.min;
 	DATE.trigger.max    = FREE.trigger.max;
 	/*-- time --*/
 	TIME.trigger = {};
-	TIME.trigger.type   = function(val) {return "(TIME(new."+val.name+") IS NULL OR new."+val.name+" NOT GLOB '[0-2][0-9]:[0-5][0-9]*')";}
+	TIME.trigger.type   = function(val) {return swap("(TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*')", val);}
 	TIME.trigger.unique = FREE.trigger.unique;
 	TIME.trigger.null   = FREE.trigger.null;
 	TIME.trigger.min    = FREE.trigger.min;
 	TIME.trigger.max    = FREE.trigger.max;
 	/*-- id --*/
 	ID.trigger = {};
-	ID.trigger.type = function(val) {return "(new."+val.name+" IS NULL) OR ((SELECT COUNT(*) FROM "+val.target+" WHERE _id_ = new."+val.name+") != 1)";}
+	ID.trigger.type = function(val) {return swap("(new.@col@ IS NULL) OR ((SELECT COUNT(*) FROM @target@ WHERE _id_ = new.@col@) != 1)", val);}
 
 	/*-- CONFIGURAÇÃO: menssages --*/
 
 	/*-- free --*/
 	FREE.message = {};
-	FREE.message.type   = function (val) {return val.name+": Enter a textual value";}
-	FREE.message.unique = function (val) {return val.name+": Existing registration.";}
-	FREE.message.null   = function (val) {return val.name+": Required value.";}
-	FREE.message.min    = function (val) {return val.name+": Value less than allowed.";}
-	FREE.message.max    = function (val) {return val.name+": Greater than allowed value.";}
-	FREE.message.glob   = function (val) {return val.name+": Value in the wrong format.";}
+	FREE.message.type   = function (val) {return swap("@col@: Enter a textual value", val);}
+	FREE.message.unique = function (val) {return swap("@col@: Existing registration.", val);}
+	FREE.message.null   = function (val) {return swap("@col@: Required value.", val);}
+	FREE.message.min    = function (val) {return swap("@col@: Value less than allowed.", val);}
+	FREE.message.max    = function (val) {return swap("@col@: Greater than allowed value.", val);}
+	FREE.message.glob   = function (val) {return swap("@col@: Value in the wrong format.", val);}
 	FREE.message.like   = FREE.message.glob;
 	/*-- number --*/
 	NUMBER.message = {};
-	NUMBER.message.type   = function(val) {return val.name+": The value must be numeric.";}
+	NUMBER.message.type   = function(val) {return swap("@col@: The value must be numeric.", val);}
 	NUMBER.message.unique = FREE.message.unique;
 	NUMBER.message.null   = FREE.message.null;
 	NUMBER.message.min    = FREE.message.min;
 	NUMBER.message.max    = FREE.message.min;
 	/*-- text --*/
 	TEXT.message = {};
-	TEXT.message.type   = function(val) {return val.name+": Enter only letters and simple spaces.";}
+	TEXT.message.type   = function(val) {return swap("@col@: Enter only letters and simple spaces.", val);}
 	TEXT.message.unique = FREE.message.unique;
 	TEXT.message.null   = FREE.message.null;
-	TEXT.message.min    =  function(val) {return val.name+": Amount of characters less than allowed.";}
-	TEXT.message.max    =  function(val) {return val.name+": Amount of characters greater than allowed.";}
+	TEXT.message.min    =  function(val) {return swap("@col@: Amount of characters less than allowed.", val);}
+	TEXT.message.max    =  function(val) {return swap("@col@: Amount of characters greater than allowed.", val);}
 	/*-- boolean --*/
 	CONFIG.boolean.message = {}
-	CONFIG.boolean.message.type = function(val) {return val.name+": The value must be boolean (1 or 0).";}
+	CONFIG.boolean.message.type = function(val) {return swap("@col@: The value must be boolean (1 or 0).", val);}
 	CONFIG.boolean.message.null = FREE.message.null;
 	/*-- date --*/
 	DATE.message = {};
-	DATE.message.type   = function(val) {return val.name+": Enter a valid date.";}
+	DATE.message.type   = function(val) {return swap("@col@: Enter a valid date.", val);}
 	DATE.message.unique = FREE.message.unique;
 	DATE.message.null   = FREE.message.null;
 	DATE.message.min    = FREE.message.min;
 	DATE.message.max    = FREE.message.min;
 	/*-- time --*/
 	TIME.message = {};
-	TIME.message.type   = function(val) {return val.name+": Enter a valid time.";}
+	TIME.message.type   = function(val) {return swap("@col@: Enter a valid time.", val);}
 	TIME.message.unique = FREE.message.unique;
 	TIME.message.null   = FREE.message.null;
 	TIME.message.min    = FREE.message.min;
 	TIME.message.max    = FREE.message.min;
 	/*-- id --*/
 	ID.message = {};
-	ID.message.type = function(val) {return val.name+": Register not found in table "+val.target+".";}
+	ID.message.type = function(val) {return swap("@col@: Register not found in table "+val.target+".", val);}
 
 	/*-- CONFIGURAÇÃO: INSERT LOG --*/ //FIXME: precisa disso? para que serve?
 
 	/*-- free --*/
 	FREE.log = {};
-		FREE.log.type = function(val) {return "TRIM("+val.name+")";}
+		FREE.log.type = function(val) {return "TRIM(@col@)";}
 	/*-- number --*/
 	NUMBER.log = {};
-	NUMBER.log.type = function(val) {return "ABS(new."+val.name+") <> 0 OR new."+val.name+" = 0 THEN CAST(new.%col AS REAL) ELSE new.%col"+val.name;}
+	NUMBER.log.type = function(val) {return "ABS(new.@col@) <> 0 OR new.@col@ = 0 THEN CAST(new.%col AS REAL) ELSE new.%col"+val.name;}
 	/*-- text --*/
 	TEXT.log = {};
-	TEXT.log.type = function(val) {return "WHEN TRIM(new."+val.name+") = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new."+val.name+")), '  ', ' ')";}
+	TEXT.log.type = function(val) {return "WHEN TRIM(new.@col@) = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new.@col@)), '  ', ' ')";}
 	/*-- boolean --*/
 	CONFIG.boolean.log = {};
-	CONFIG.boolean.log.type = function(val) {return "UPPER(new."+val.name+") IN ('TRUE', '1') THEN 1 WHEN UPPER(new."+val.name+"l) IN ('FALSE', '0') THEN 0 ELSE new."+val.name;}
+	CONFIG.boolean.log.type = function(val) {return "UPPER(new.@col@) IN ('TRUE', '1') THEN 1 WHEN UPPER(new.@col@l) IN ('FALSE', '0') THEN 0 ELSE new."+val.name;}
 	/*-- date --*/
 	DATE.log = {};
-	DATE.log.type = function(val) {return "TRIM("+val.name+")";}
+	DATE.log.type = function(val) {return "TRIM(@col@)";}
 	/*-- time --*/
 	TIME.log = {};
-	TIME.log.type = function(val) {return "TRIM("+val.name+")";}
+	TIME.log.type = function(val) {return "TRIM(@col@)";}
 	/*-- id --*/
 	ID.log = {};
-	ID.logtype = function(val) {return "TRIM("+val.name+")";}
+	ID.logtype = function(val) {return "TRIM(@col@)";}
 
-	/*-- Get All Information from column --*/
 
-	function xAttributes(col) {
-		var type, obj, value;
-		/*-- getting type --*/
-		type = FREE.value.type(col.getAttribute("type"));
-		/*-- setting obj var --*/
-		obj  = {value: {}};
-		/*-- getting column values --*/
-		for (var val in CONFIG[type].value) {
-			obj.value[val] = CONFIG[type].value[val](col.getAttribute(val));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/*------------------------------------------------------------------------*/
+
+	/*-- Funções especiais --*/
+
+	/*-- Troca variáveis na string --*/
+	function swap(txt, val) {
+		var re;
+		for (var i in val) {
+			re = new RegExp("@"+i+"@", "g");
+			txt = txt.replace(re, val[i]);
 		}
-		/*-- getting table name --*/
-		obj.value.tab = FREE.value.name(col.parentNode.getAttribute("name"));
-		/*-- getting the other information (Except "value".) --*/
-		for (var key in CONFIG[type]) {
+		return txt;
+	}
+
+	/*-- Obtém o atributo type --*/
+	function atype(val) {
+		return val !== null && val in CONFIG ? val : "free";
+	}
+	
+	/*-- Obtém o atributo name --*/
+	function aname(val) {
+		return val !== null && (/^[A-Z]([A-Z0-9\_]+)?$/i).test(val) ? val : null;
+	}
+
+	/*-- Obtém todos os dados de cada coluna XML --*/
+	function attr(xml) {
+		var cname, tname, ctype, obj, value;
+		/*-- Obtendo tipo e nome (coluna e tabela) --*/
+		tname = aname(xml.parentNode.getAttribute("name"));
+		cname = aname(xml.getAttribute("name"));
+		ctype = atype(xml.getAttribute("type"));
+		/*-- Definindo objeto que conterá todas as informações --*/
+		obj  = {};
+		/*-- Definindo os valores das colunas (value) --*/
+		obj.value = {type: ctype, col: cname, tab: tname};
+		for (var val in CONFIG[ctype].value) {
+			obj.value[val] = CONFIG[ctype].value[val](xml.getAttribute(val));
+		}
+		/*-- Looping nos produtos (exceto value) --*/
+		for (var key in CONFIG[ctype]) {
 			if (key !== "value") {
-				obj[key] = {};
-				for (var att in CONFIG[type][key]) {
-					/*-- getting value (if not null) --*/
+				obj[key] = {col: cname, tab: tname};
+				/*-- Definindo informações sobre cada produto (quando value não for nulo) --*/
+				for (var att in CONFIG[ctype][key]) {
 					if (obj.value[att] !== null) {
-						value = CONFIG[type][key][att](obj.value);
-						if (key === "message" && col.getElementsByTagName(att).length > 0) {
-							value = col.getElementsByTagName(att)[0].childNodes[0].nodeValue;
+						value = CONFIG[ctype][key][att](obj.value);
+						if (key === "message" && xml.getElementsByTagName(att).length > 0) {
+							value = xml.getElementsByTagName(att)[0].childNodes[0].nodeValue;
 						}
 						obj[key][att] = value;
-
 					}
 				}
 			}
 		}
 		return obj;
-	};
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	/*-- Erros --*/
 
@@ -462,7 +520,7 @@ var XSQLite = (function() {
 		/*-- looping in columns --*/
 		for (var i = 0; i < child.length; i++) {
 			/*-- getting data column --*/
-			col = xAttributes(child[i]);
+			col = attr(child[i]);
 			/*-- creating column --*/
 			cols.push(createColumn(col.column));
 			/*-- creating foreign keys --*/
@@ -492,7 +550,7 @@ var XSQLite = (function() {
 		sql.push("CREATE VIEW IF NOT EXISTS vw_"+tab.getAttribute("name")+" AS SELECT ");
 		/*-- looping in columns --*/
 		for (var i = 0; i < child.length; i++) {
-			col.push(xAttributes(child[i]).value.name);
+			col.push(attr(child[i]).value.name);
 		}
 		/*-- adding columns to view --*/
 		sql.push("\t"+col.join(",\n\t"));
@@ -519,7 +577,7 @@ var XSQLite = (function() {
 		/*-- looping in columns --*/
 		for (var i = 0; i < child.length; i++) {
 			/*-- getting data column --*/
-			col = xAttributes(child[i]);
+			col = attr(child[i]);
 			/*-- creating column --*/
 			cols.push(col.column.type);
 		}
@@ -576,7 +634,7 @@ var XSQLite = (function() {
 		/*-- looping in columns --*/
 		for (var i = 0; i < child.length; i++) {
 			/*-- getting data column --*/
-			col = xAttributes(child[i]);
+			col = attr(child[i]);
 			/*-- creating case --*/
 			cases.push(createCase(col));
 		}
@@ -612,11 +670,11 @@ var XSQLite = (function() {
 		/*-- looping in columns --*/
 		child = tab.getElementsByTagName("column");
 		for (var i = 0; i < child.length; i++) {
-			col.push(xAttributes(child[i]).value.name);
+			col.push(attr(child[i]).value.name);
 			if (type === "DELETE") {
 				val.push("NULL");
 			} else {
-				val.push("new."+xAttributes(child[i]).value.name);
+				val.push("new."+attr(child[i]).value.name);
 			}
 		}
 		/*-- adding columns to insert --*/
@@ -685,12 +743,13 @@ var XSQLite = (function() {
 			xml = new ActiveXObject("Microsoft.XMLDOM");
 			xml.async = false;
 			xml.loadXML(xml);
-		} 
+		}
+		/*
 		log = checkErrors(xml);
 		if (log.length > 0) {
 			showErrors(log);
 			throw Error("XSQLite -> Inconsistencies found in table guidelines.");
-		}
+		}*/
 		Object.defineProperties(this, {
 			_x: {
 				value: xml
