@@ -3,13 +3,105 @@
 var XSQLite = (function() {
 	var CONFIG, FREE, NUMBER, TEXT, BOOLEAN, DATE, TIME, ID;
 
+	var NAME, ATTR;
+	NAME = /^[A-Z]([A-Z0-9\_]+)?$/i;
+	ATTR = {
+		notNull: getNotNull,
+		unique:  getUnique,
+		default: getDefault,
+		min:     getMin,
+		max:     getMax,
+		like:    getTemplate,
+		glob:    getTemplate,
+		table:   getName
+	};
+
+
+
+	function start(xml) {
+		var sql, tables, columns, values, tab, col, type, swap, attr;
+		values = {};
+		/*-- obtendo root --*/
+		sql = xml.getElementsByTagName("sql");
+		if (sql.length !== 1) throw Error("sql tag: Root not found or more than one reported.");
+		/*-- obtendo tabelas --*/
+		tables = sql[0].getElementsByTagName("table");
+		if (tables.length === 0) throw Error("table tag: Tables not found.");
+		/*-- looping nas tabelas --*/
+		for (var t = 0; t < tables.length; t++) {
+			/*-- obtendo o nome das tabelas --*/
+			tab = getName(tables[t]);
+			if (tab === false) throw Error("table["+t+"]: The name attribute is in incorrect format.");
+			/*-- definindo tabelas em values --*/
+			if (tab in values) throw Error("table["+tab+"]: Table name already used.");
+			values[tab] = {};
+			/*-- obtendo as colunas da tabela --*/
+			columns = tables[t].getElementsByTagName("column");
+			if (columns.length === 0) throw Error("column tag: Columns not found in table["+tab+"]");
+			/*-- looping nas tabelas --*/
+			for (var c = 0; c < columns.length; c++) {
+				/*-- obtendo o nome das colunas --*/
+				col = getName(columns[c]);
+				if (col === false) throw Error("table["+tab+"]column["+c+"]: The name attribute is in incorrect format.");
+				/*-- definindo colunas em values --*/
+				if (col in values) throw Error("table["+tab+"]column["+col+"]: Column name already used.");
+				values[tab][col] = {};
+				/*-- obtendo atributos das colunas --*/
+				swap = {};
+				for (var a in ATTR) {
+					attr = ATTR[a](columns[c]);//FIXME: criar as funções de ATTR
+					if (attr === false) throw Error("table["+tab+"]column["+col+"]attribute["+a+"]: Badly formatted attribute.");
+					/*-- adicionando o atributo a swap caso exista --*/
+					if (attr === null) {
+						continue;
+					} else {
+						swap[a] = attr;
+					}
+					/*-- obtendo as mensagens definidas no xml --*/
+				}
+				
+				
+				
+				
+			}
+		
+		
+		
+		}
+		console.log(values);
+	
+	
+	
+	
+	};
+	
+	
+	
+	function getName(xml) {
+			var x = xml.getAttribute("name");
+			if (NAME.test(x) !== true) {
+				x = false;
+			}
+			return x;
+	}
+
+
+
+
+
+
+
+
+
+
+
 	/*-- Objeto para obter as informações do XML --*/
 	function Master(xml) {
 		if (!(this instanceof Master)) {
 			return new Master(xml);
 		}
 		Object.defineProperty(this, "xml", {
-			value: xml
+			value: "tagName" in xml ? xml : xml.getElementsByTagName("sql")[0]
 		});
 		return;
 	};
@@ -27,7 +119,7 @@ var XSQLite = (function() {
 		FTIME: {value: /^TIME\(.*\)$/i},
 		WIDTH: {value: /^[1-9]([0-9]+)?$/},
 		error: {value: function(msg, attr, val) {
-			if (x !== undefined) throw Error(this.tag+"."+attr+"="+val+": "+msg);
+			if (msg !== undefined) throw Error("."+attr+"="+val+": "+msg);
 		}},
 		val: {value: function(x) {
 			return this.xml.getAttribute(x);
@@ -42,7 +134,7 @@ var XSQLite = (function() {
 			if (this.tag === "table") {
 				x = this.name;
 			} else if (this.tag === "column") {
-				x = new Master(this.parentNode).name;
+				x = Master(this.parentNode).name;
 			} else {
 				x = null;
 			}
@@ -188,18 +280,18 @@ var XSQLite = (function() {
 			var x, names, name;
 			names = [];
 			if (this.tag === "sql") {
-				x = this.getElementsByTagName("table");
+				x = this.xml.getElementsByTagName("table");
 			} else if (this.tag === "table") {
-				x = this.getElementsByTagName("column");
+				x = this.xml.getElementsByTagName("column");
 			} else {
-				x = this.getElementsByTagName("sql");
+				x = this.xml.getElementsByTagName("sql");
 			}
 			if (x.length === 0) {
 				this.error("Element has no children.", this.tag, "[]");
 			}
 			if (this.tag === "sql" || this.tag === "table") {
 				for (var i = 0; i < x.length; i++) {
-					name = new Master(x[i]).name;
+					name = Master(x[i]).name;
 					if (names.indexOf(name) >= 0) {
 						this.error("Repeated name used.", this.tag, "[]");
 					}
@@ -208,6 +300,15 @@ var XSQLite = (function() {
 			}
 			return x;
 		}},
+		message: {value: function(attr) {
+			var x, msg;
+			x = null;
+			if (this.tag === "column") {
+				x = this.xml.getElementsByTagName(attr)[0];
+				x = x === null ? null : x.childNodes[0].nodeValue;
+			}
+			return x;
+		}}
 	});
 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -233,7 +334,6 @@ var XSQLite = (function() {
 
 	/*-- CONFIGURAÇÃO: produtos --*/
 	for (var type in CONFIG) {
-		CONFIG[type].value   = {};
 		CONFIG[type].column  = {};
 		CONFIG[type].view    = {};
 		CONFIG[type].trigger = {};
@@ -445,13 +545,6 @@ var XSQLite = (function() {
 
 
 
-
-
-
-
-
-
-
 	/*-- SQL COLUMN --*/
 	function createColumn(col) {
 		var sql, seq;
@@ -471,24 +564,24 @@ var XSQLite = (function() {
 		sql  = [];
 		col  = [];
 		key  = [];
-		cols = tab.getElementsByTagName("column");
+		cols = Master(tab).childs;
 		/*-- obtendo colunas e chaves --*/
 		col.push("_id_ INTEGER PRIMARY KEY AUTOINCREMENT");
 		for (var i = 0; i < cols.length; i++) {
-			data = attr(cols[i]);
-			col.push(createColumn(data.column));
-			if ("foreign" in col) {
-				key.push(data.foreign.key);
+			data = column(cols[i]);
+//			col.push(createColumn(data));
+//			if ("foreign" in col) {
+//				key.push(data.foreign.key);
 			}
-		}
+//		}
 		/*-- transferindo as chaves para as colunas --*/
-		for (var k = 0; k < key.length; k++) {
-			col.push(key[k]);
-		}
+//		for (var k = 0; k < key.length; k++) {
+//			col.push(key[k]);
+//		}
 		/*-- construindo a tabela --*/
-		sql.push("CREATE TABLE IF NOT EXISTS "+tab.getAttribute("name")+" (");
-		sql.push("\t"+col.join(",\n\t"));
-		sql.push(");");
+//		sql.push("CREATE TABLE IF NOT EXISTS "+tab.getAttribute("name")+" (");
+//		sql.push("\t"+col.join(",\n\t"));
+//		sql.push(");");
 		return sql.join("\n");
 	};
 
@@ -686,12 +779,9 @@ var XSQLite = (function() {
 			xml.async = false;
 			xml.loadXML(xml);
 		}
-		/*
-		log = checkErrors(xml);
-		if (log.length > 0) {
-			showErrors(log);
-			throw Error("XSQLite -> Inconsistencies found in table guidelines.");
-		}*/
+		start(xml);
+
+
 		Object.defineProperties(this, {
 			_x: {
 				value: xml
@@ -708,18 +798,19 @@ var XSQLite = (function() {
 			enumerable: true,
 			value: function() {
 				var sql, tabs;
-				sql = ["PRAGMA foreign_keys = ON;"];
-				tabs = this._x.getElementsByTagName("sql")[0].getElementsByTagName("table");
+				sql = ["-- Created by XSQLite v1.0.0 [https://github.com/wdonadelli/XSQLite] --"];
+				sql.push("PRAGMA foreign_keys = ON;");
+				tabs = Master(this._x).childs;/*
 				for (var i = 0; i < tabs.length; i++) {
 					sql.push(createTable(tabs[i]));
-					sql.push(createView(tabs[i]));
+					/*sql.push(createView(tabs[i]));
 					sql.push(createLog(tabs[i]));
 					sql.push(createTriggerBefore(tabs[i], "INSERT"));
 					sql.push(createTriggerBefore(tabs[i], "UPDATE"));
 					sql.push(createTriggerAfter(tabs[i], "INSERT"));
 					sql.push(createTriggerAfter(tabs[i], "UPDATE"));
 					sql.push(createTriggerAfter(tabs[i], "DELETE"));
-				}
+				}*/
 				return sql.join("\n\n------------------------------------------------------\n\n");
 			}
 		}
@@ -729,7 +820,7 @@ var XSQLite = (function() {
 })();
 
 window.addEventListener("load", function() {
-	//var x = XSQLite(document.getElementById("xml").value);
-	//console.log(x.toSQL());
+	var x = XSQLite(document.getElementById("xml").value);
+	console.log(x.toSQL());
 });
 
