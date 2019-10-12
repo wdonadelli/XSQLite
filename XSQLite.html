@@ -63,7 +63,7 @@ window.addEventListener("load", start);
 		<column name="cDate" type="date" unique="true" null="true" min="2010-01-01" max="DATE()" default="2010-02-02" />
 		<column name="cTime" type="time" unique="true" null="true" min="23:23:00" max="TIME()" default="TIME()" />
 		<column name="cFree" type="free" unique="true" null="true" min="5" max="10"/>
-		<column name="cKeys" type="id" target="targetTable" />
+		<column name="cKeys" type="id" source="targetTable" />
 	</table>
 </sql>
 				</textarea>

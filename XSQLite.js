@@ -1,391 +1,90 @@
 "use strict";
 
 var XSQLite = (function() {
-	var CONFIG, FREE, NUMBER, TEXT, BOOLEAN, DATE, TIME, ID;
+	var NAME, TEXT, BOOL, DATE, FDATE, TIME, FTIME, WIDTH, ATTR, TYPE, SQL;
 
-	var NAME, ATTR;
-	NAME = /^[A-Z]([A-Z0-9\_]+)?$/i;
-	ATTR = {
+	/*-- constantes --*/
+	NAME  = /^[A-Z]([A-Z0-9\_]+)?$/i;
+	TEXT  = /^[A-Z]+((\ [A-Z]+)+)?$/i;
+	BOOL  = /^(1|TRUE|0|FALSE)$/i;
+	DATE  = /^[0-9]{4}(\-[0-9]{2}){2}$/;
+	FDATE = /^DATE\(.*\)$/i;
+	TIME  = /^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/;
+	FTIME = /^TIME\(.*\)$/i;
+	WIDTH = /^[1-9]([0-9]+)?$/;
+	/*-- atributos específicos --*/
+	ATTR  = {
 		notNull: getNotNull,
 		unique:  getUnique,
 		default: getDefault,
 		min:     getMin,
 		max:     getMax,
-		like:    getTemplate,
-		glob:    getTemplate,
-		table:   getName
+		like:    getLike,
+		glob:    getGlob,
+		source:  getSource
 	};
-
-
-
-	function start(xml) {
-		var sql, tables, columns, values, tab, col, type, swap, attr;
-		values = {};
-		/*-- obtendo root --*/
-		sql = xml.getElementsByTagName("sql");
-		if (sql.length !== 1) throw Error("sql tag: Root not found or more than one reported.");
-		/*-- obtendo tabelas --*/
-		tables = sql[0].getElementsByTagName("table");
-		if (tables.length === 0) throw Error("table tag: Tables not found.");
-		/*-- looping nas tabelas --*/
-		for (var t = 0; t < tables.length; t++) {
-			/*-- obtendo o nome das tabelas --*/
-			tab = getName(tables[t]);
-			if (tab === false) throw Error("table["+t+"]: The name attribute is in incorrect format.");
-			/*-- definindo tabelas em values --*/
-			if (tab in values) throw Error("table["+tab+"]: Table name already used.");
-			values[tab] = {};
-			/*-- obtendo as colunas da tabela --*/
-			columns = tables[t].getElementsByTagName("column");
-			if (columns.length === 0) throw Error("column tag: Columns not found in table["+tab+"]");
-			/*-- looping nas tabelas --*/
-			for (var c = 0; c < columns.length; c++) {
-				/*-- obtendo o nome das colunas --*/
-				col = getName(columns[c]);
-				if (col === false) throw Error("table["+tab+"]column["+c+"]: The name attribute is in incorrect format.");
-				/*-- definindo colunas em values --*/
-				if (col in values) throw Error("table["+tab+"]column["+col+"]: Column name already used.");
-				values[tab][col] = {};
-				/*-- obtendo atributos das colunas --*/
-				swap = {};
-				for (var a in ATTR) {
-					attr = ATTR[a](columns[c]);//FIXME: criar as funções de ATTR
-					if (attr === false) throw Error("table["+tab+"]column["+col+"]attribute["+a+"]: Badly formatted attribute.");
-					/*-- adicionando o atributo a swap caso exista --*/
-					if (attr === null) {
-						continue;
-					} else {
-						swap[a] = attr;
-					}
-					/*-- obtendo as mensagens definidas no xml --*/
-				}
-				
-				
-				
-				
-			}
-		
-		
-		
-		}
-		console.log(values);
-	
-	
-	
-	
+	/*-- atributos específicos de cada tipo --*/
+	TYPE  = {
+		free:     ["notNull", "unique", "default", "min", "max", "like", "glob"],
+		number:   ["notNull", "unique", "default", "min", "max"],
+		text:     ["notNull", "unique", "default", "min", "max"],
+		boolean:  ["notNull", "default"],
+		date:     ["notNull", "unique", "default", "min", "max"],
+		time:     ["notNull", "unique", "default", "min", "max"],
+		id:       ["source"]
 	};
-	
-	
-	
-	function getName(xml) {
-			var x = xml.getAttribute("name");
-			if (NAME.test(x) !== true) {
-				x = false;
-			}
-			return x;
-	}
-
-
-
-
-
-
-
-
-
-
-
-	/*-- Objeto para obter as informações do XML --*/
-	function Master(xml) {
-		if (!(this instanceof Master)) {
-			return new Master(xml);
-		}
-		Object.defineProperty(this, "xml", {
-			value: "tagName" in xml ? xml : xml.getElementsByTagName("sql")[0]
-		});
-		return;
+	/*-- montagem do SQL --*/
+	SQL   = {
+		free:     {column: {}, trigger:{}, message: {}},
+		number:   {column: {}, trigger:{}, message: {}},
+		text:     {column: {}, trigger:{}, message: {}},
+		boolean:  {column: {}, trigger:{}, message: {}},
+		date:     {column: {}, trigger:{}, message: {}},
+		time:     {column: {}, trigger:{}, message: {}},
+		id:       {column: {}, trigger:{}, message: {}}
 	};
-
-	Object.defineProperties(Master.prototype, {
-		constructor: {
-			value: Master
-		},
-		NAME:  {value: /^[A-Z]([A-Z0-9\_]+)?$/i},
-		TYPE:  {value: ["free", "number", "text", "boolean", "date", "time", "id"]},
-		TEXT:  {value: /^[A-Z]+((\ [A-Z]+)+)?$/i},
-		DATE:  {value: /^[0-9]{4}(\-[0-9]{2}){2}$/},
-		FDATE: {value: /^DATE\(.*\)$/i},
-		TIME:  {value: /^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/},
-		FTIME: {value: /^TIME\(.*\)$/i},
-		WIDTH: {value: /^[1-9]([0-9]+)?$/},
-		error: {value: function(msg, attr, val) {
-			if (msg !== undefined) throw Error("."+attr+"="+val+": "+msg);
-		}},
-		val: {value: function(x) {
-			return this.xml.getAttribute(x);
-		}},
-		tag: {get: function() {
-			var x = this.xml.tagName.toLowerCase();
-			if (["sql", "table", "column"].indexOf(x) < 0) {this.error("Undefined tag name", "", x);}
-			return x;
-		}},
-		tab: {get: function() {
-			var x;
-			if (this.tag === "table") {
-				x = this.name;
-			} else if (this.tag === "column") {
-				x = Master(this.parentNode).name;
-			} else {
-				x = null;
-			}
-			return x;
-		}},
-		col: {get: function() {
-			return this.tag === "column" ? this.name : null;
-		}},
-		name: {get: function() {
-			var x = this.val("name");
-			if (this.NAME.test(x) !== true) {this.error("Invalid value", "name", x);}
-			return x;
-		}},
-		type: {get: function() {
-			var x = null;
-			if (this.tag === "column") {
-				x = new String(this.val("name")).toLowerCase();
-				x = this.TYPE.indexOf(x) < 0 ? "free" : x;
-			}
-			return x;
-		}},
-		unique: {get: function() {
-			return this.val("unique") !== null ? true : null;
-		}},
-		notNull: {get: function() {
-			return this.val("notNull") !== null ? true : null;
-		}},
-		glob: {get: function() {
-			return this.val("glob") === null ? null : "'"+this.val("glob")+"'";
-		}},
-		like: {get: function() {
-			return this.val("like") === null ? null : "'"+this.val("like")+"'";
-		}},
-		default: {get: function() {
-			var x = this.val("default");
-			if (x !== null) {
-				if (this.type === "free") {
-					x = "'"+x+"'";
-				} else if (this.type === "number") {
-					x = !isNaN(x) ? x : false;
-				} else if (this.type === "text") {
-					x = TEXT.test(x) !== true ? false : "'"+x+"'";
-				} else if (this.type === "boolean") {
-					x = x.toLowerCase();
-					if (["true", "1"].indexOf(x) >= 0) {
-						x = 1;
-					} else if (["false", "0"].indexOf(x) >= 0) {
-						x = 0;
-					} else {
-						x = false;
-					}
-				} else if (this.type === "date") {
-					if (this.DATE.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FDATE.test(x) !== true) {
-						x = false;
-					}
-				} else if (this.type === "time") {
-					if (this.TIME.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FTIME.test(x) !== true) {
-						x = false;
-					}
-				} else {
-						x = null;
-				}
-			}
-			if (x === false) {this.error("Invalid value", "default", x);}
-			return x;
-		}},
-		min: {get: function() {
-			var x = this.val("min");
-			if (x !== null) {
-				if (this.type === "free") {
-					x = "'"+x+"'";
-				} else if (this.type === "number") {
-						x = !isNaN(x) ? x : false;
-				} else if (this.type === "text") {
-					x = WIDTH.test(x) !== true ? false : x;
-				} else if (this.type === "date") {
-					if (this.DATE.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FDATE.test(x) !== true) {
-						x = false;
-					}
-				} else if (this.type === "time") {
-					if (this.TIME.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FTIME.test(x) !== true) {
-						x = false;
-					}
-				} else {
-					x = null;
-				}
-			}
-			if (x === false) {
-				this.error("Invalid value", "min", x);
-			}
-			return x;
-		}},
-		max: {get: function() {
-			var x = this.val("max");
-			if (x !== null) {
-				if (this.type === "free") {
-					x = "'"+x+"'";
-				} else if (this.type === "number") {
-						x = !isNaN(x) ? x : false;
-				} else if (this.type === "text") {
-					x = WIDTH.test(x) !== true ? false : x;
-					if (this.min !== null && Number(x) < Number(this.min)) {
-						this.error("the max attribute is less than the min attribute.", "max", x);
-					}
-				} else if (this.type === "date") {
-					if (this.DATE.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FDATE.test(x) !== true) {
-						x = false;
-					}
-				} else if (this.type === "time") {
-					if (this.TIME.test(x) === true) {
-						x = "'"+x+"'";
-					} else if (this.FTIME.test(x) !== true) {
-						x = false;
-					}
-				} else {
-					x = null;
-				}
-			}
-			if (x === false) {this.error("Invalid value", "maxn", x);}
-			return x;
-		}},
-		table: {get: function() {
-			var x;
-			if (this.type !== "id") {
-				x = null;
-			} else {
-				x =  this.val("table");
-				if (this.NAME.test(x) !== true) {this.error("Invalid value", "table", x);}
-			}
-			return x;		
-		}},
-		childs: {get: function() {
-			var x, names, name;
-			names = [];
-			if (this.tag === "sql") {
-				x = this.xml.getElementsByTagName("table");
-			} else if (this.tag === "table") {
-				x = this.xml.getElementsByTagName("column");
-			} else {
-				x = this.xml.getElementsByTagName("sql");
-			}
-			if (x.length === 0) {
-				this.error("Element has no children.", this.tag, "[]");
-			}
-			if (this.tag === "sql" || this.tag === "table") {
-				for (var i = 0; i < x.length; i++) {
-					name = Master(x[i]).name;
-					if (names.indexOf(name) >= 0) {
-						this.error("Repeated name used.", this.tag, "[]");
-					}
-					names.push(name);
-				}
-			}
-			return x;
-		}},
-		message: {value: function(attr) {
-			var x, msg;
-			x = null;
-			if (this.tag === "column") {
-				x = this.xml.getElementsByTagName(attr)[0];
-				x = x === null ? null : x.childNodes[0].nodeValue;
-			}
-			return x;
-		}}
-	});
-
-/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-	/*-- CONFIGURAÇÃO: tipos --*/
-	CONFIG = {};
-
-	CONFIG.free    = {};
-	CONFIG.number  = {};
-	CONFIG.text    = {};
-	CONFIG.boolean = {};
-	CONFIG.date    = {};
-	CONFIG.time    = {};
-	CONFIG.id      = {};
-	
-	FREE    = CONFIG.free;
-	NUMBER  = CONFIG.number;
-	TEXT    = CONFIG.text;
-	BOOLEAN = CONFIG.boolean;
-	DATE    = CONFIG.date;
-	TIME    = CONFIG.time;
-	ID      = CONFIG.id;
-
-	/*-- CONFIGURAÇÃO: produtos --*/
-	for (var type in CONFIG) {
-		CONFIG[type].column  = {};
-		CONFIG[type].view    = {};
-		CONFIG[type].trigger = {};
-	}
-
-	/*-- CONFIGURAÇÃO: colunas --*/
-	FREE.column = {
+	/*-- montagem SQL:column --*/
+	SQL.free.column = {
 		type:    "@col@ TEXT",
 		unique:  "UNIQUE",
 		notNull: "NOT NULL",
 		default: "DEFAULT(@default@)"
 	};
-	NUMBER.column = {
+	SQL.number.column = {
 		type:    "@col@ NUMBER",
-		unique:  FREE.column.unique,
-		notNull: FREE.column.notNull,
-		default: FREE.column.default
+		unique:  SQL.free.column.unique,
+		notNull: SQL.free.column.notNull,
+		default: SQL.free.column.default
 	};
-	TEXT.column = {
-		type:    FREE.column.type,
-		unique:  FREE.column.unique,
-		notNull: FREE.column.notNull,
-		default: FREE.column.default
+	SQL.text.column = {
+		type:    "@col@ TEXT",
+		unique:  SQL.free.column.unique,
+		notNull: SQL.free.column.notNull,
+		default: SQL.free.column.default
 	};
-	BOOLEAN.column = {
+	SQL.boolean.column = {
 		type:    "@col@ INTEGER",
-		notNull: FREE.column.notNull,
-		default: FREE.column.default
+		notNull: SQL.free.column.notNull,
+		default: SQL.free.column.default
 	};
-	DATE.column = {
-		type:    FREE.column.type,
-		unique:  FREE.column.unique,
-		notNull: FREE.column.notNull,
-		default: FREE.column.default
+	SQL.date.column = {
+		type:    "@col@ TEXT",
+		unique:  SQL.free.column.unique,
+		notNull: SQL.free.column.notNull,
+		default: SQL.free.column.default
 	};
-	TIME.column = {
-		type:    FREE.column.type,
-		unique:  FREE.column.unique,
-		notNull: FREE.column.notNull,
-		default: FREE.column.default
+	SQL.time.column = {
+		type:    "@col@ TEXT",
+		unique:  SQL.free.column.unique,
+		notNull: SQL.free.column.notNull,
+		default: SQL.free.column.default
 	};
-	ID.column = {
-		type: BOOLEAN.column.type
-	};
-
-	/*-- CONFIGURAÇÃO: chave estrangeira --*/
-	ID.foreign = {
-		key: "FOREIGN KEY(@col@) REFERENCES @table@(_id_) ON UPDATE CASCADE"
-	};
-
-	/*-- CONFIGURAÇÃO: gatilhos INSERT/UPDATE BEFORE --*/
-	FREE.trigger = {
+	SQL.id.column = {
+		type:    "@col@ INTEGER",
+		foreign: "FOREIGN KEY(@col@) REFERENCES @source@(_id_) ON UPDATE CASCADE"
+	};	
+	/*-- montagem SQL: trigger --*/
+	SQL.free.trigger = {
 		unique:  "(SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0",
 		notNull: "new.@col@ IS NULL OR TRIM(new.@col@) = ''",
 		min:     "new.@col@ < @min@",
@@ -393,44 +92,43 @@ var XSQLite = (function() {
 		glob:    "new.@col@ NOT GLOB @glob@",
 		like:    "new.@col@ NOT LIKE @like@"
 	};
-	NUMBER.trigger = {
+	SQL.number.trigger = {
 		type:    "UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL')",
-		unique:  FREE.trigger.unique,
-		notNull: FREE.trigger.notNull,
-		min:     FREE.trigger.min,
-		max:     FREE.trigger.max
+		unique:  SQL.free.trigger.unique,
+		notNull: SQL.free.trigger.notNull,
+		min:     SQL.free.trigger.min,
+		max:     SQL.free.trigger.max
 	};
-	TEXT.trigger = {
+	SQL.text.trigger = {
 		type:    "UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *'",
 		unique:  "(SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0",
-		notNull: FREE.trigger.notNull,
+		notNull: SQL.free.trigger.notNull,
 		min:     "LENGTH(new.@col@) < @min@",
 		max:     "LENGTH(new.@col@) > @max@"
 	};
-	BOOLEAN.trigger = {
+	SQL.boolean.trigger = {
 		type:    "new.@col@ NOT IN (0,1)",
-		notNull: FREE.trigger.notNull
+		notNull: SQL.free.trigger.notNull
 	};
-	DATE.trigger = {
+	SQL.date.trigger = {
 		type:   "DATE(new.@col@, '+1 day', '-1 day') != new.@col@",
-		unique:  FREE.trigger.unique,
-		notNull: FREE.trigger.notNull,
-		min:     FREE.trigger.min,
-		max:     FREE.trigger.max
+		unique:  SQL.free.trigger.unique,
+		notNull: SQL.free.trigger.notNull,
+		min:     SQL.free.trigger.min,
+		max:     SQL.free.trigger.max
 	};
-	TIME.trigger = {
+	SQL.time.trigger = {
 		type:    "TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*'",
-		unique:  FREE.trigger.unique,
-		notNull: FREE.trigger.notNull,
-		min:     FREE.trigger.min,
-		max:     FREE.trigger.max
+		unique:  SQL.free.trigger.unique,
+		notNull: SQL.free.trigger.notNull,
+		min:     SQL.free.trigger.min,
+		max:     SQL.free.trigger.max
 	};
-	ID.trigger = {
-		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @table@ WHERE _id_ = new.@col@) != 1"
+	SQL.id.trigger = {
+		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
 	};
-
-	/*-- CONFIGURAÇÃO: menssages --*/
-	FREE.message = {
+	/*-- montagem SQL:messages --*/
+	SQL.free.message = {
 		type:    "@col@: Enter a textual value",
 		unique:  "@col@: Existing registration.",
 		notNull: "@col@: Required value.",
@@ -439,111 +137,244 @@ var XSQLite = (function() {
 		glob:    "@col@: Value in the wrong format.",
 		like:    "@col@: Value in the wrong format."
 	};
-	NUMBER.message = {
+	SQL.number.message = {
 		type:    "@col@: The value must be numeric.",
-		unique:  FREE.message.unique,
-		notNull: FREE.message.notNull,
-		min:     FREE.message.min,
-		max:     FREE.message.min
+		unique:  SQL.free.message.unique,
+		notNull: SQL.free.message.notNull,
+		min:     SQL.free.message.min,
+		max:     SQL.free.message.min
 	};
-	TEXT.message = {
+	SQL.text.message = {
 		type:    "@col@: Enter only letters and simple spaces.",
-		unique:  FREE.message.unique,
-		notNull: FREE.message.notNull,
+		unique:  SQL.free.message.unique,
+		notNull: SQL.free.message.notNull,
 		min:     "@col@: Amount of characters less than allowed.",
 		max:     "@col@: Amount of characters greater than allowed."
 	};
-	BOOLEAN.message = {
+	SQL.boolean.message = {
 		type:    "@col@: The value must be boolean (1 or 0).",
-		notNull: FREE.message.notNull
+		notNull: SQL.free.message.notNull
 	};
-	DATE.message = {
+	SQL.date.message = {
 		type:    "@col@: Enter a valid date.",
-		unique:  FREE.message.unique,
-		notNull: FREE.message.notNull,
-		min:     FREE.message.min,
-		max:     FREE.message.min
+		unique:  SQL.free.message.unique,
+		notNull: SQL.free.message.notNull,
+		min:     SQL.free.message.min,
+		max:     SQL.free.message.min
 	};
-	TIME.message = {
+	SQL.time.message = {
 		type:    "@col@: Enter a valid time.",
-		unique:  FREE.message.unique,
-		notNull: FREE.message.notNull,
-		min:     FREE.message.min,
-		max:     FREE.message.min
+		unique:  SQL.free.message.unique,
+		notNull: SQL.free.message.notNull,
+		min:     SQL.free.message.min,
+		max:     SQL.free.message.min
 	};
-	ID.message = {
-		type: "@col@: Register not found in table @table@"
-	};
-
-	/*-- CONFIGURAÇÃO: INSERT LOG --*/ //FIXME: precisa disso? para que serve?
-	FREE.log = {
-			type: "TRIM(@col@)"
-	};
-	NUMBER.log = {
-		type: "ABS(new.@col@) <> 0 OR new.@col@ = 0 THEN CAST(new.%col AS REAL) ELSE new.@col@"
-	};
-	TEXT.log = {
-		type: "WHEN TRIM(new.@col@) = '' THEN NULL ELSE REPLACE(UPPER(TRIM(new.@col@)), '  ', ' ')"
-	};
-	BOOLEAN.log = {
-		type: "UPPER(new.@col@) IN ('TRUE', '1') THEN 1 WHEN UPPER(new.@col@l) IN ('FALSE', '0') THEN 0 ELSE new.@col@"
-	};
-	DATE.log = {
-		type: "TRIM(@col@)"
-	};
-	TIME.log = {
-		type: "TRIM(@col@)"
-	};
-	ID.log = {
-		type: "TRIM(@col@)"
+	SQL.id.message = {
+		type: "@col@: Register not found in table @source@"
 	};
 
+	/*-- funções privadas --*/
+	function start(xml) {
+		var sql, tables, columns, values, tab, col, type, swap, attr, msg, re;
+		values = {};
+		/*-- obtendo root --*/
+		sql = xml.getElementsByTagName("sql");
+		if (sql.length !== 1) throw Error("XML root element (sql) not found or more than one reported.");
+		/*-- obtendo tabelas --*/
+		tables = sql[0].getElementsByTagName("table");
+		if (tables.length === 0) throw Error("Tables not found.");
+		/*-- looping nas tabelas --*/
+		for (var t = 0; t < tables.length; t++) {
+			/*-- obtendo o nome das tabelas --*/
+			tab = getName(tables[t]);
+			if (tab === false) throw Error("#"+t+": The table's name attribute is in the wrong format or not defined.");
+			/*-- definindo tabelas em values --*/
+			if (tab in values) throw Error(tab+": Table name already used.");
+			values[tab] = {};
+			/*-- obtendo as colunas da tabela --*/
+			columns = tables[t].getElementsByTagName("column");
+			if (columns.length === 0) throw Error(tab+": Columns not found.");
+			/*-- looping nas tabelas --*/
+			for (var c = 0; c < columns.length; c++) {
+				/*-- obtendo o nome das colunas --*/ 
+				col = getName(columns[c]);
+				if (col === false) throw Error([tab,"#"+c].join(".")+": The column's name attribute is in the wrong format or not defined.");
+				/*-- definindo colunas em values --*/
+				if (col in values) throw Error([tab,col].join(".")+": Column name already used.");
+				values[tab][col] = {};
+				/*-- obtendo atributos das colunas --*/
+				swap = {};
+				swap.tab  = tab;
+				swap.col  = col;
+				swap.type = getType(columns[c]);
+				swap.msg  = {};
+				for (var a in ATTR) {
+					/*-- verificando se o atributo existe para o tipo --*/
+					if (TYPE[swap.type].indexOf(a) < 0) {
+						continue;
+					}
+					/*-- obtendo atributo individual --*/
+					attr = ATTR[a](columns[c]);
+					if (attr === false) throw Error([tab,col,a].join(".")+": Badly formatted attribute.");
+					/*-- adicionando o atributo a swap caso exista --*/
+					if (attr === null) {
+						continue;
+					} else {
+						swap[a] = attr;
+					}
+				}
+				/*-- obtendo as mensagens definidas no xml --*/
+				for (var m in SQL[swap.type].message) {
+					msg = columns[c].getElementsByTagName(m);
+					swap.msg[m] = msg.length === 0 ? SQL[swap.type].message[m] : msg[0].childNodes[0].nodeValue;
+				}
+				/*-- definindo values: objetos SQL --*/
+				for (var x in SQL[getType(columns[c])]) {
+					if (!(x in values[tab][col])) {
+						values[tab][col][x] = {};
+					}
+					/*-- definindo values: valores SQL (se existente apenas) --*/
+					for (var y in SQL[getType(columns[c])][x]) {//FIXME ainda não consegui entender como definir as mensagens personalizadas
+						if (y in swap) {
+							values[tab][col][x][y] = SQL[getType(columns[c])][x][y];
+							/*-- definindo values: trocando referência por valores reais --*/
+							for (var z in swap) {
+								re = new RegExp("@"+z+"@", "g");
+								values[tab][col][x][y] = values[tab][col][x][y].replace(re, swap[z]);
+							}
+						}
+					}
+				}
+			}
+		}console.log(values);
+		return values;
+	};
+	
+	
+	
+	function getName(xml) {
+		var x = xml.getAttribute("name");
+		return NAME.test(x) !== true || x === null ? false : x;
+	};
+	function getType(xml) {
+		var x = new String(xml.getAttribute("type")).toLowerCase();
+		return x in TYPE ? x : "free";
+	};
+	function getNotNull(xml) {
+		var x = xml.getAttribute("notNull");
+		return x === null ? null : true;
+	};
+	function getUnique(xml) {
+		var x = xml.getAttribute("unique");
+		return x === null ? null : true;
+	};
+	function getLike(xml) {
+		var x = xml.getAttribute("like");
+		return x === null ? null : "'"+x+"'";
+	};
+	function getGlob(xml) {
+		var x = xml.getAttribute("glob");
+		return x === null ? null : "'"+x+"'";
+	};
+	function getSource(xml) {
+		var x = xml.getAttribute("source");
+		return NAME.test(x) !== true || x === null ? false : x;
+	};
+	function getDefault(xml) {
+		var x, type;
+		x = xml.getAttribute("default");
+		type = getType(xml)
+		if (x === null) {
+			x = null;
+		} else if (type === "free") {
+			x = "'"+x+"'";
+		} else if (type === "number") {
+			x = !isNaN(x) ? x : false;
+		} else if (type === "text") {
+				x = TEXT.test(x) === true ? "'"+x+"'" : false;
+		} else if (type === "boolean") {
+			if (BOOL.test(x.toLowerCase()) !== true) {
+				x = false;
+			} else {
+				x = ["true", "1"].indexOf(x.toLowerCase()) >= 0 ? 1 : 0;
+			}
+		} else if (type === "date") {
+			if (DATE.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FDATE.test(x) !== true) {
+				x = false;
+			}
+		} else if (type === "time") {
+			if (TIME.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FTIME.test(x) !== true) {
+				x = false;
+			}
+		} else {
+				x = null;
+		}
+		return x;
+	};
+	function getMin(xml) {
+		var x, type;
+		x = xml.getAttribute("min");
+		type = getType(xml)
+		if (x === null) {
+			x = null;
+		} else if (type === "free") {
+			x = "'"+x+"'";
+		} else if (type === "number") {
+			x = !isNaN(x) ? x : false;
+		} else if (type === "text") {
+				x = WIDTH.test(x) === true ? x : false;
+		} else if (type === "date") {
+			if (DATE.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FDATE.test(x) !== true) {
+				x = false;
+			}
+		} else if (type === "time") {
+			if (TIME.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FTIME.test(x) !== true) {
+				x = false;
+			}
+		} else {
+				x = null;
+		}
+		return x;
+	};
+	function getMax(xml) {
+		var x, type;
+		x = xml.getAttribute("max");
+		type = getType(xml)
+		if (x === null) {
+			x = null;
+		} else if (type === "free") {
+			x = "'"+x+"'";
+		} else if (type === "number") {
+			x = !isNaN(x) ? x : false;
+		} else if (type === "text") {
+				x = WIDTH.test(x) === true ? x : false;
+		} else if (type === "date") {
+			if (DATE.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FDATE.test(x) !== true) {
+				x = false;
+			}
+		} else if (type === "time") {
+			if (TIME.test(x) === true) {
+				x = "'"+x+"'";
+			} else if (FTIME.test(x) !== true) {
+				x = false;
+			}
+		} else {
+				x = null;
+		}
+		return x;
+	};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	/*-- SQL --*/
 
 	/*-- SQL COLUMN --*/
 	function createColumn(col) {
@@ -779,12 +610,9 @@ var XSQLite = (function() {
 			xml.async = false;
 			xml.loadXML(xml);
 		}
-		start(xml);
-
-
 		Object.defineProperties(this, {
-			_x: {
-				value: xml
+			xml: {
+				value: start(xml)
 			}
 		});
 		return
@@ -800,7 +628,7 @@ var XSQLite = (function() {
 				var sql, tabs;
 				sql = ["-- Created by XSQLite v1.0.0 [https://github.com/wdonadelli/XSQLite] --"];
 				sql.push("PRAGMA foreign_keys = ON;");
-				tabs = Master(this._x).childs;/*
+				/*tabs = Master(this._x).childs;
 				for (var i = 0; i < tabs.length; i++) {
 					sql.push(createTable(tabs[i]));
 					/*sql.push(createView(tabs[i]));
