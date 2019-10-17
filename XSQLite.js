@@ -442,8 +442,7 @@ var XSQLite = (function() {
 		return sql.join("\n");
 	};
 
-
-	function createCase(cname, col) {console.log(col)
+	function createCase(cname, col) {
 		var sql, when, constraints;
 		sql  = [];
 		when = [];
@@ -465,9 +464,6 @@ var XSQLite = (function() {
 		sql.push("\tEND;\n");
 		return sql.join("\n");
 	};
-
-
-
 
 	function createTriggerBefore(tname, cols, event) {
 		var sql, cases, id, name;
