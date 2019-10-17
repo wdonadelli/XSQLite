@@ -80,9 +80,9 @@ var XSQLite = (function() {
 		default: SQL.free.column.default
 	};
 	SQL.id.column = {
-		type:    "@col@ INTEGER",
-		foreign: "FOREIGN KEY(@col@) REFERENCES @source@(_id_) ON UPDATE CASCADE"
-	};	
+		type:   "@col@ INTEGER",
+		source: "FOREIGN KEY(@col@) REFERENCES @source@(_id_) ON UPDATE CASCADE"
+	};
 	/*-- montagem SQL: trigger --*/
 	SQL.free.trigger = {
 		unique:  "(SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0",
@@ -125,7 +125,7 @@ var XSQLite = (function() {
 		max:     SQL.free.trigger.max
 	};
 	SQL.id.trigger = {
-		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
+		source: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
 	};
 	/*-- montagem SQL:messages --*/
 	SQL.free.message = {
@@ -170,7 +170,7 @@ var XSQLite = (function() {
 		max:     SQL.free.message.min
 	};
 	SQL.id.message = {
-		type: "@col@: Register not found in table @source@"
+		source: "@col@: Register not found in table @source@"
 	};
 
 	/*-- funções privadas --*/
@@ -234,9 +234,13 @@ var XSQLite = (function() {
 						values[tab][col][x] = {};
 					}
 					/*-- definindo values: valores SQL (se existente apenas) --*/
-					for (var y in SQL[getType(columns[c])][x]) {//FIXME ainda não consegui entender como definir as mensagens personalizadas
+					for (var y in SQL[getType(columns[c])][x]) {
 						if (y in swap) {
-							values[tab][col][x][y] = SQL[getType(columns[c])][x][y];
+							if (x === "message" && y in swap.msg) {
+								values[tab][col][x][y] = swap.msg[y];
+							} else {
+								values[tab][col][x][y] = SQL[getType(columns[c])][x][y];
+							}
 							/*-- definindo values: trocando referência por valores reais --*/
 							for (var z in swap) {
 								re = new RegExp("@"+z+"@", "g");
@@ -246,40 +250,45 @@ var XSQLite = (function() {
 					}
 				}
 			}
-		}console.log(values);
+		}
 		return values;
 	};
-	
-	
-	
+
 	function getName(xml) {
 		var x = xml.getAttribute("name");
 		return NAME.test(x) !== true || x === null ? false : x;
 	};
+
 	function getType(xml) {
 		var x = new String(xml.getAttribute("type")).toLowerCase();
 		return x in TYPE ? x : "free";
 	};
+
 	function getNotNull(xml) {
 		var x = xml.getAttribute("notNull");
 		return x === null ? null : true;
 	};
+
 	function getUnique(xml) {
 		var x = xml.getAttribute("unique");
 		return x === null ? null : true;
 	};
+
 	function getLike(xml) {
 		var x = xml.getAttribute("like");
 		return x === null ? null : "'"+x+"'";
 	};
+
 	function getGlob(xml) {
 		var x = xml.getAttribute("glob");
 		return x === null ? null : "'"+x+"'";
 	};
+
 	function getSource(xml) {
 		var x = xml.getAttribute("source");
 		return NAME.test(x) !== true || x === null ? false : x;
 	};
+
 	function getDefault(xml) {
 		var x, type;
 		x = xml.getAttribute("default");
@@ -315,6 +324,7 @@ var XSQLite = (function() {
 		}
 		return x;
 	};
+
 	function getMin(xml) {
 		var x, type;
 		x = xml.getAttribute("min");
@@ -344,6 +354,7 @@ var XSQLite = (function() {
 		}
 		return x;
 	};
+
 	function getMax(xml) {
 		var x, type;
 		x = xml.getAttribute("max");
@@ -374,47 +385,132 @@ var XSQLite = (function() {
 		return x;
 	};
 
-	/*-- SQL --*/
-
-	/*-- SQL COLUMN --*/
-	function createColumn(col) {
-		var sql, seq;
+	/*-- Objetos SQLite --*/
+	function createColumn(cname, col) {
+		var sql, constraints;
 		sql = [];
-		seq = ["type", "unique", "notNull", "default"];
-		for (var i = 0; i < seq.length; i++) {
-			if (seq[i] in col) {
-				sql.push(col[seq[i]]);
+		/*-- obtendo as restrições da coluna --*/
+		constraints = ["type", "unique", "notNull", "default"];
+		for (var i = 0; i < constraints.length; i++) {
+			if (constraints[i] in col) {
+				sql.push(col[constraints[i]]);
 			}
 		}
 		return sql.join(" ");
 	};
 
-	/*-- SQL TABLE --*/
-	function createTable(tab) {
-		var sql, col, key, cols, data;
-		sql  = [];
-		col  = [];
-		key  = [];
-		cols = Master(tab).childs;
+	function createTable(tname, cols) {
+		var sql, col, key;
+		sql = [];
+		col = [];
+		key = [];
 		/*-- obtendo colunas e chaves --*/
 		col.push("_id_ INTEGER PRIMARY KEY AUTOINCREMENT");
-		for (var i = 0; i < cols.length; i++) {
-			data = column(cols[i]);
-//			col.push(createColumn(data));
-//			if ("foreign" in col) {
-//				key.push(data.foreign.key);
+		for (var cname in cols) {
+			col.push(createColumn(cname, cols[cname].column));
+			if ("source" in cols[cname].column) {
+				key.push(cols[cname].column.source);
 			}
-//		}
+		}
 		/*-- transferindo as chaves para as colunas --*/
-//		for (var k = 0; k < key.length; k++) {
-//			col.push(key[k]);
-//		}
+		for (var k = 0; k < key.length; k++) {
+			col.push(key[k]);
+		}
 		/*-- construindo a tabela --*/
-//		sql.push("CREATE TABLE IF NOT EXISTS "+tab.getAttribute("name")+" (");
-//		sql.push("\t"+col.join(",\n\t"));
-//		sql.push(");");
+		sql.push("CREATE TABLE IF NOT EXISTS "+tname+" (");
+		sql.push("\t"+col.join(",\n\t"));
+		sql.push(");");
 		return sql.join("\n");
 	};
+
+	function createTableLog(tname, cols) {
+		var sql, col, key;
+		sql = [];
+		col = [];
+		key = [];
+		/*-- obtendo colunas e chaves --*/
+		col.push("_log_ TEXT DEFAULT(DATETIME('now', 'localtime'))");
+		col.push("_event_ INTEGER CHECK(_event_ IN (0, 1, 2))");
+		col.push("_id_ INTEGER");
+		for (var cname in cols) {
+			col.push(cols[cname].column.type);
+		}
+		/*-- construindo a tabela --*/
+		sql.push("CREATE TABLE IF NOT EXISTS _"+tname+"_ (");
+		sql.push("\t"+col.join(",\n\t"));
+		sql.push(");");
+		return sql.join("\n");
+	};
+
+
+	function createCase(cname, col) {console.log(col)
+		var sql, when, constraints;
+		sql  = [];
+		when = [];
+		/*-- obtendo as restrições --*/
+		constraints = ["notNull", "unique", "type", "min", "max", "glob", "like", "source"];
+		for (var i = 0; i < constraints.length; i++) {
+			if (constraints[i] in col.trigger) {
+				if ("notNull" in col.trigger || "source" in col.trigger || cname === "_id_") {
+					when.push("WHEN ("+col.trigger[constraints[i]]+") THEN");
+				} else {
+					when.push("WHEN (new."+cname+" IS NOT NULL) AND ("+col.trigger[constraints[i]]+") THEN");
+				}
+				when.push("\tRAISE(ABORT, '"+col.message[constraints[i]]+"')");
+			}
+		}
+		/*-- construindo cases --*/
+		sql.push("SELECT CASE");
+		sql.push("\t\t"+when.join("\n\t\t"));
+		sql.push("\tEND;\n");
+		return sql.join("\n");
+	};
+
+
+
+
+	function createTriggerBefore(tname, cols, event) {
+		var sql, cases, id, name;
+		sql   = [];
+		cases = [];
+		id    = {};
+		/*-- para atualização: impedir mudança no id --*/
+		if (event === 1) {
+			id.trigger = {type: "new._id_ != old._id_"};
+			id.message = {type: "The table identifier (_id_) cannot be changed."};
+			cases.push(createCase("_id_", id));
+		}
+		/*-- obtendo demais cases --*/
+		for (var cname in cols) {
+			cases.push(createCase(cname, cols[cname]));
+		}
+		/*-- construindo o trigger --*/
+		if (event === 0) {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_before_insert_"+tname+"_ BEFORE INSERT ON "+tname+" BEGIN\n");
+		} else if (event === 1) {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_before_update_"+tname+"_ BEFORE UPDATE ON "+tname+" BEGIN\n");
+		}
+		sql.push("\t"+cases.join("\n\t"));
+		sql.push("END;");
+		return sql.join("\n");
+	};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	/*-- SQL VIEW --*/
 	function createView(tab) {
@@ -434,82 +530,12 @@ var XSQLite = (function() {
 		return sql.join("\n");
 	};
 
-	/*-- SQL LOG --*/
-	function createLog(tab) {
-		var sql, col, cols, data;
-		sql  = [];
-		col  = [];
-		cols = tab.getElementsByTagName("column");
-		/*-- obtendo colunas --*/
-		col.push("_log_ TEXT DEFAULT(DATETIME('now', 'localtime'))");
-		col.push("_event_ TEXT CHECK(_event_ IN (0, 1, 2))");
-		col.push("_id_ INTEGER");
-		for (var i = 0; i < cols.length; i++) {
-			data = attr(cols[i]);
-			col.push(data.column.type);
-		}
-		/*-- contruindo tabela --*/
-		sql.push("CREATE TABLE IF NOT EXISTS _"+tab.getAttribute("name")+"_ (");
-		sql.push("\t"+col.join(",\n\t"));
-		sql.push(");");
-		return sql.join("\n");
-	};
 
-	/*-- SQL TRIGGER CASES --*/
-	function createCase(col) {
-		var sql, when, seq;
-		sql  = [];
-		when = [];
-		seq  = ["notNull", "unique", "type", "min", "max", "glob", "like"];
-		/*-- obtendo os atributos --*/
-		for (var i = 0; i < seq.length; i++) {
-			if (seq[i] in col.trigger) {
-				if (col.value.notNull !== true) {
-					when.push("WHEN (new."+col.value.col+" IS NOT NULL) AND "+col.trigger[seq[i]]+" THEN");
-				} else {
-					when.push("WHEN "+col.trigger[seq[i]]+" THEN");
-				}
-				when.push("\tRAISE(ABORT, '"+col.message[seq[i]]+"')");
-			}
-		}
-		/*-- construindo cases --*/
-		sql.push("SELECT CASE");
-		sql.push("\t\t"+when.join("\n\t\t"));
-		sql.push("\tEND;\n");
-		return sql.join("\n");
-	};
+	
 
 	/*-- SQL TRIGGER BEFORE --*/
 
-	function createTriggerBefore(tab, trigger) {
-		var sql, col, cases, child, name;
-		sql   = [];
-		cases = [];
-		name  = tab.getAttribute("name");
-		child = tab.getElementsByTagName("column");
-		/*-- starting trigger --*/
-		if (trigger === "UPDATE") {
-			sql.push("CREATE TRIGGER IF NOT EXISTS tr_before_update_"+name+" BEFORE "+trigger+" ON "+name+" BEGIN\n");
-			sql.push("\tSELECT CASE");
-			sql.push("\t\tWHEN new._id_ != old._id_ THEN");
-			sql.push("\t\t\tRAISE(ABORT, 'The table identifier (_id_) cannot be changed.')");
-			sql.push("\tEND;\n");
-		} else if (trigger === "INSERT") {
-			sql.push("CREATE TRIGGER IF NOT EXISTS tr_before_insert_"+name+" BEFORE "+trigger+" ON "+name+" BEGIN\n");
-		}
-		/*-- looping in columns --*/
-		for (var i = 0; i < child.length; i++) {
-			/*-- getting data column --*/
-			col = attr(child[i]);
-			/*-- creating case --*/
-			cases.push(createCase(col));
-		}
-		/*-- adding cases to trigger --*/
-		sql.push("\t"+cases.join("\n\t"));
-		/*-- finishing log --*/
-		sql.push("END;");
-		return sql.join("\n");
-	};
+
 
 	/*-- SQL CREATE INSERT --*/
 	function createInsertLog(tab, type) {
@@ -622,23 +648,28 @@ var XSQLite = (function() {
 		constructor: {
 			value: XSQLite
 		},
+		version: {
+			enumerable: true,
+			value: "1.0.0"
+		},
 		toSQL: {
 			enumerable: true,
 			value: function() {
 				var sql, tabs;
-				sql = ["-- Created by XSQLite v1.0.0 [https://github.com/wdonadelli/XSQLite] --"];
+				sql = ["-- Created by XSQLite v"+this.version+" [https://github.com/wdonadelli/XSQLite] --"];
 				sql.push("PRAGMA foreign_keys = ON;");
-				/*tabs = Master(this._x).childs;
-				for (var i = 0; i < tabs.length; i++) {
-					sql.push(createTable(tabs[i]));
+				for (var tname in this.xml) {
+					sql.push(createTable(tname, this.xml[tname]));
+					sql.push(createTableLog(tname, this.xml[tname]));
+					sql.push(createTriggerBefore(tname, this.xml[tname], 0));
+					sql.push(createTriggerBefore(tname, this.xml[tname], 1));
 					/*sql.push(createView(tabs[i]));
-					sql.push(createLog(tabs[i]));
-					sql.push(createTriggerBefore(tabs[i], "INSERT"));
+
 					sql.push(createTriggerBefore(tabs[i], "UPDATE"));
 					sql.push(createTriggerAfter(tabs[i], "INSERT"));
 					sql.push(createTriggerAfter(tabs[i], "UPDATE"));
-					sql.push(createTriggerAfter(tabs[i], "DELETE"));
-				}*/
+					sql.push(createTriggerAfter(tabs[i], "DELETE"));*/
+				}
 				return sql.join("\n\n------------------------------------------------------\n\n");
 			}
 		}
@@ -646,9 +677,3 @@ var XSQLite = (function() {
 
 	return XSQLite;
 })();
-
-window.addEventListener("load", function() {
-	var x = XSQLite(document.getElementById("xml").value);
-	console.log(x.toSQL());
-});
-
