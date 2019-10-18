@@ -16,16 +16,22 @@
 	<script>
 function start() {
 	try {
-		var x = XSQLite(document.getElementById("xml").value);
-		document.getElementById("sqlite").textContent = x.toSQL();;
+		var x = XSQLite(wd$("#xml").item(0).value);
+		wd$("#sqlite").item(0).textContent = x.toSQL();;
 	} catch(e) {
 		console.log(e);
-		document.getElementById("sqlite").textContent = e;
+		wd$("#sqlite").item(0).textContent = e;
 	}
 	return;	
 };
+function example() {
+	var xml = wd("example.xml");
+	xml.request(function(x) {
+		wd$("#xml").item(0).value = x.text;
+	}).get();
+	return;
+}
 
-window.addEventListener("load", start);
 	</script>
 </head>
 
@@ -38,6 +44,7 @@ window.addEventListener("load", start);
 <nav class="wd-nav wd-buddy wd-box-opaque-out wd-box-white">
 	<a href="#" data-wd-action="tab{#tab_xml}" data-wd-click="">XML</a>
 	<a href="#" data-wd-action="tab{#tab_sql}" onclick="start();">SQL</a>
+	<span onclick="example();">Example</span>
 </nav>
 
 <div class="wd-content">
@@ -48,25 +55,7 @@ window.addEventListener("load", start);
 		<div id="tab_xml">
 
 			<form class="wd-vform wd-margin">
-				<textarea id="xml" class="wd-box-green wd-input wd-radius" style="height: 400px" placeholder="XML content">
-<sql>
-	<table name="table1">
-		<column name="cText" type="text" unique="true" null="true" min="5" max="10" default="WILLIAN DONADELLI" >
-			<type>-- Type message --</type>
-			<unique>-- Unique message --</unique>
-			<null>-- Null message --</null>
-			<min>-- Min message --</min>
-			<max>-- Max message --</max>
-		</column>
-		<column name="cNumb" type="number" unique="true" null="false" min="5" max="10" default="20" />
-		<column name="cBool" type="boolean" null="true" default="1" unique="true" />
-		<column name="cDate" type="date" unique="true" null="true" min="2010-01-01" max="DATE()" default="2010-02-02" />
-		<column name="cTime" type="time" unique="true" null="true" min="23:23:00" max="TIME()" default="TIME()" />
-		<column name="cFree" type="free" unique="true" null="true" min="5" max="10"/>
-		<column name="cKeys" type="id" source="targetTable" />
-	</table>
-</sql>
-				</textarea>
+				<textarea id="xml" class="wd-box-green wd-input wd-radius" style="height: 400px" placeholder="XML content"></textarea>
 				<div class="wd-text-small wd-text-blue wd-input-help">Enter the XML code in the field above and click <q>SQL</q> to see the result.</div>
 			</form>
 		</div>

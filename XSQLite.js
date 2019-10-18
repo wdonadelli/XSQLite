@@ -125,7 +125,7 @@ var XSQLite = (function() {
 		max:     SQL.free.trigger.max
 	};
 	SQL.id.trigger = {
-		source: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
+		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
 	};
 	/*-- montagem SQL:messages --*/
 	SQL.free.message = {
@@ -170,7 +170,7 @@ var XSQLite = (function() {
 		max:     SQL.free.message.min
 	};
 	SQL.id.message = {
-		source: "@col@: Register not found in table @source@"
+		type: "@col@: Register not found in table @source@"
 	};
 
 	/*-- funções privadas --*/
@@ -442,18 +442,34 @@ var XSQLite = (function() {
 		return sql.join("\n");
 	};
 
-	function createCase(cname, col) {
+	function createCase(cname, col, event) {
 		var sql, when, constraints;
 		sql  = [];
 		when = [];
 		/*-- obtendo as restrições --*/
-		constraints = ["notNull", "unique", "type", "min", "max", "glob", "like", "source"];
+		constraints = ["notNull", "unique", "type", "min", "max", "glob", "like"];
 		for (var i = 0; i < constraints.length; i++) {
-			if (constraints[i] in col.trigger) {
-				if ("notNull" in col.trigger || "source" in col.trigger || cname === "_id_") {
+			/*-- ON INSERT --*/
+			if (constraints[i] in col.trigger && event === 0) {
+				/*-- quando não aceitar nulo: verificar restrição --*/
+				if ("notNull" in col.trigger || "source" in col.column || cname === "_id_") {
 					when.push("WHEN ("+col.trigger[constraints[i]]+") THEN");
+				/*-- quando aceitar nulo: verificar a restrição se o valor não for nulo --*/
 				} else {
 					when.push("WHEN (new."+cname+" IS NOT NULL) AND ("+col.trigger[constraints[i]]+") THEN");
+				}
+				when.push("\tRAISE(ABORT, '"+col.message[constraints[i]]+"')");
+			}
+			/*-- ON UPDATE (não verificar a restrição se o valor não mudou) --*/
+			if (constraints[i] in col.trigger && event === 1) {
+				/*-- quando não aceitar nulo: verificar restrição --*/
+				if (cname === "_id_") {
+					when.push("WHEN ("+col.trigger[constraints[i]]+") THEN");
+				} else if ("notNull" in col.trigger || "source" in col.column || cname === "_id_") {
+					when.push("WHEN (new."+cname+" != old."+cname+") AND ("+col.trigger[constraints[i]]+") THEN");
+				/*-- quando aceitar nulo: verificar a restrição se o valor não for nulo --*/
+				} else {
+					when.push("WHEN (new."+cname+" IS NOT NULL AND new."+cname+" != old."+cname+") AND ("+col.trigger[constraints[i]]+") THEN");
 				}
 				when.push("\tRAISE(ABORT, '"+col.message[constraints[i]]+"')");
 			}
@@ -472,13 +488,14 @@ var XSQLite = (function() {
 		id    = {};
 		/*-- para atualização: impedir mudança no id --*/
 		if (event === 1) {
+			id.column  = {};
 			id.trigger = {type: "new._id_ != old._id_"};
 			id.message = {type: "The table identifier (_id_) cannot be changed."};
-			cases.push(createCase("_id_", id));
+			cases.push(createCase("_id_", id, event));
 		}
 		/*-- obtendo demais cases --*/
 		for (var cname in cols) {
-			cases.push(createCase(cname, cols[cname]));
+			cases.push(createCase(cname, cols[cname], event));
 		}
 		/*-- construindo o trigger --*/
 		if (event === 0) {
@@ -491,132 +508,62 @@ var XSQLite = (function() {
 		return sql.join("\n");
 	};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	/*-- SQL VIEW --*/
-	function createView(tab) {
-		var sql, col, cols;
-		sql  = [];
-		col  = [];
-		cols = tab.getElementsByTagName("column");
-		/*-- obtendo colunas --*/
-		col.push("_id_");
-		for (var i = 0; i < cols.length; i++) {
-			col.push(attr(cols[i]).value.col);
-		}
-		/*-- construindo view --*/
-		sql.push("CREATE VIEW IF NOT EXISTS _vw_"+tab.getAttribute("name")+"_ AS SELECT ");
-		sql.push("\t"+col.join(",\n\t"));
-		sql.push("FROM "+tab.getAttribute("name")+";");
-		return sql.join("\n");
-	};
-
-
-	
-
-	/*-- SQL TRIGGER BEFORE --*/
-
-
-
-	/*-- SQL CREATE INSERT --*/
-	function createInsertLog(tab, type) {
-		var sql, col, val, child;
+	function createInsertLog(tname, cols, event) {
+		var sql, col, val;
 		sql = [];
 		col = [];
 		val = []
-		/*-- start insert --*/
-		sql.push("\tINSERT INTO _"+tab.getAttribute("name")+"_ (");
+		/*-- obtendo colunas e valores --*/
 		col.push("_event_");
-		if (type === "INSERT") {
-			val.push(1);
-		} else if (type === "UPDATE") {
-			val.push(0);
-		} else {
-			val.push(-1);
-		}
+		val.push(event);
 		col.push("_id_");
-		if (type === "INSERT") {
-			val.push("new._id_");
-		} else {
-			val.push("old._id_");
-		}
+		val.push(event === 0 ? "new._id_" : "old._id_");
+
 		/*-- looping in columns --*/
-		child = tab.getElementsByTagName("column");
-		for (var i = 0; i < child.length; i++) {
-			col.push(attr(child[i]).value.col);
-			if (type === "DELETE") {
-				val.push("notNull");
-			} else {
-				val.push("new."+attr(child[i]).value.col);
-			}
+		for (var cname in cols) {
+			col.push(cname);
+			val.push(event === 2 ? "NULL" : "new."+cname);
 		}
-		/*-- adding columns to insert --*/
+		/*-- construindo o insert --*/
+		sql.push("\tINSERT INTO _"+tname+"_ (");
 		sql.push("\t\t"+col.join(",\n\t\t"));
-		/*-- adding values to insert --*/
 		sql.push("\t) VALUES (");
 		sql.push("\t\t"+val.join(",\n\t\t"));
-		/*-- finishing insert --*/
 		sql.push("\t);");
 		return sql.join("\n");
 	};
 
-	/*-- SQL TRIGGER AFTER --*/
-	function createTriggerAfter(tab, trigger) {
-		var sql, child, name;
+	function createTriggerAfter(tname, cols, event) {
+		var sql;
 		sql   = [];
-		name  = tab.getAttribute("name");
-		child = tab.getElementsByTagName("column");
-		/*-- starting trigger --*/
-		if (trigger === "UPDATE") {
-			sql.push("CREATE TRIGGER IF NOT EXISTS tr_after_update_"+name+" AFTER "+trigger+" ON "+name+" BEGIN\n");
-		} else if (trigger === "INSERT") {
-			sql.push("CREATE TRIGGER IF NOT EXISTS tr_after_insert_"+name+" AFTER "+trigger+" ON "+name+" BEGIN\n");
+		/*-- construindo o trigger --*/
+		if (event === 0) {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_insert_"+tname+"_ AFTER INSERT ON "+tname+" BEGIN\n");
+		} else if (event === 1) {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_update_"+tname+"_ AFTER UPDATE ON "+tname+" BEGIN\n");
 		} else {
-			sql.push("CREATE TRIGGER IF NOT EXISTS tr_after_delete_"+name+" AFTER "+trigger+" ON "+name+" BEGIN\n");
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_delete_"+tname+"_ AFTER DELETE ON "+tname+" BEGIN\n");
 		}
-		/*-- insert in log --*/
-		sql.push(createInsertLog(tab, trigger));
-		/*-- finishing log --*/
+		sql.push(createInsertLog(tname, cols, event));
 		sql.push("\nEND;");
 		return sql.join("\n");
 	};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	function createTriggerBeforeLog(tname, event) {
+		var sql;
+		sql   = [];
+		/*-- construindo o trigger --*/
+		if (event === 1) {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_update_log_"+tname+"_ AFTER UPDATE ON _"+tname+"_ BEGIN\n");
+		} else {
+			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_delete_log_"+tname+"_ AFTER DELETE ON _"+tname+"_ BEGIN\n");
+		}
+		sql.push("\tSELECT");
+		sql.push("\t\tRAISE(ABORT, 'The log table cannot be changed!')");
+		sql.push("\tEND;");
+		sql.push("\nEND;");
+		return sql.join("\n");
+	};
 
 	/*-- Constructor --*/
 	function XSQLite(xml) {
@@ -659,12 +606,11 @@ var XSQLite = (function() {
 					sql.push(createTableLog(tname, this.xml[tname]));
 					sql.push(createTriggerBefore(tname, this.xml[tname], 0));
 					sql.push(createTriggerBefore(tname, this.xml[tname], 1));
-					/*sql.push(createView(tabs[i]));
-
-					sql.push(createTriggerBefore(tabs[i], "UPDATE"));
-					sql.push(createTriggerAfter(tabs[i], "INSERT"));
-					sql.push(createTriggerAfter(tabs[i], "UPDATE"));
-					sql.push(createTriggerAfter(tabs[i], "DELETE"));*/
+					sql.push(createTriggerAfter(tname, this.xml[tname], 0));
+					sql.push(createTriggerAfter(tname, this.xml[tname], 1));
+					sql.push(createTriggerAfter(tname, this.xml[tname], 2));
+					sql.push(createTriggerBeforeLog(tname, 1));
+					sql.push(createTriggerBeforeLog(tname, 2));
 				}
 				return sql.join("\n\n------------------------------------------------------\n\n");
 			}
