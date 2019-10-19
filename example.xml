@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sql>
-	<table name="client">
+	<table name="clients">
 		<column name="name" type="text" notNull="">
 			<type>Enter the customer name accordingly.</type>
 			<notNull>Client name is required.</notNull>
