@@ -31,7 +31,7 @@
 		</column>
 	</table>
 	<table name="sales">
-		<column name="client_id" type="id" source="client">
+		<column name="client_id" type="id" source="clients">
 			<type>Customer not registered.</type>
 		</column>
 		<column name="product_id" type="id" source="products">

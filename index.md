@@ -306,7 +306,7 @@ Records data of products sold to customers:
 
 ### XML
 
-Copy the project below, paste it into the code generator and check the result in SQLite.
+Copy the project below, paste it into the [code generator](XSQLite.html) and check the result in SQLite.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -342,7 +342,7 @@ Copy the project below, paste it into the code generator and check the result in
 		</column>
 	</table>
 	<table name="sales">
-		<column name="client_id" type="id" source="client">
+		<column name="client_id" type="id" source="clients">
 			<type>Customer not registered.</type>
 		</column>
 		<column name="product_id" type="id" source="products">
@@ -351,10 +351,20 @@ Copy the project below, paste it into the code generator and check the result in
 	</table>
 </sql>
 ```
+
+_The above example is merely illustrative, without concern for reality._
+
+## Compiling
+
+Below are some tools for compiling SQLite code:
+
+- [SQLite Reader](https://addons.mozilla.org/pt-BR/firefox/addon/sql-reader/) (Firefox Add-ons)
+- sqlite3 (Linux): `sqlite3 -init file`
+
 ## Version
 
 - _v1.0.0 (2019-10-18)_
 
 ## Author
 
-Willian Donadelli <wdonadelli@gmail.com>
+- Willian Donadelli (<wdonadelli@gmail.com>)
