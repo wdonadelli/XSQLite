@@ -180,6 +180,9 @@ The value of the `default`, `min` and` max` attributes obeys the following regul
 
 ```js
 /^[0-9]{4}(\-[0-9]{2}){2}$/
+```
+
+```js
 /^DATE\(.*\)$/i //DATE SQLite function
 ```
 
@@ -201,6 +204,9 @@ The value of the `default`, `min` and` max` attributes obeys the following regul
 
 ```js
 /^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/
+```
+
+```js
 /^TIME\(.*\)$/i //TIME SQLite function
 ```
 
