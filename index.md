@@ -28,7 +28,7 @@ Child of the root tag, this element defines the creation of a table. At least on
 
 ### `<column>`
 
-Child of the table tag, this element defines the creation of a column. At least one column must be entered for each table. If it has children, the element must contain opening and closing tags (`<column></column>` (with childs) or `<column />`). The element has the required attribute "name" that defines the name of the column. Column names must be unique for the same table, repeated names are not allowed. Can contain the following attributes:
+Child of the table tag, this element defines the creation of a column. At least one column must be entered for each table. If it has children, the element must contain opening and closing tags (`<column></column>` (with childs) or `<column/>`). The element has the required attribute "name" that defines the name of the column. Column names must be unique for the same table, repeated names are not allowed. Can contain the following attributes:
 
 - type
 - unique
