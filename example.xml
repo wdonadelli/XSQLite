@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sql>
+	<table name="clients">
+		<column name="name" type="text" notNull="">
+			<type>Enter the customer name accordingly.</type>
+			<notNull>Client name is required.</notNull>
+		</column>
+		<column name="birth" type="date" notNull="" max="DATE('now', '-18 years')">
+			<type>Enter the date of birth accordingly.</type>
+			<notNull>Date of birth is required.</notNull>
+			<max>Customer must be over 18 years old.</max>
+		</column>
+		<column name="doc" type="number" notNull="" min="1" max="9999999" unique="">
+			<type>Enter the customer document number.</type>
+			<notNull>Document number is required.</notNull>
+			<min>Document number must be from 1.</min>
+			<max>Document number must be up to 9999999.</max>
+			<unique>Document number already used.</unique>
+		</column>
+	</table>
+	<table name="products">
+		<column name="name" type="text" notNull="" unique="">
+			<type>Enter the product name accordingly.</type>
+			<notNull>Product name is required.</notNull>
+			<unique>Product already registered.</unique>
+		</column>
+		<column name="value" type="number" notNull="" min="0.01">
+			<type>Enter the value of the product.</type>
+			<notNull>Product value is required.</notNull>
+			<min>Minimum product value must be $ 0.01.</min>
+		</column>
+	</table>
+	<table name="sales">
+		<column name="client_id" type="id" source="clients">
+			<type>Customer not registered.</type>
+		</column>
+		<column name="product_id" type="id" source="products">
+			<type>Product not registered.</type>
+		</column>
+	</table>
+</sql>
