@@ -295,7 +295,6 @@ Records customer data:
 Records store product data:
 
 - **name** - product name (_"text", required and unique_); and
-- **value** - product value (_"number", required from 0.01_).
 
 ### sales
 
@@ -303,6 +302,7 @@ Records data of products sold to customers:
 
 - **client_id** - customer identifier (_"id", table "customers" is the reference_); and
 - **product_id** - product identifier (_"id", table "products" is the reference_).
+- **value** - product value (_"number", required from 0.01_).
 
 ### XML
 
@@ -335,11 +335,6 @@ Copy the project below, paste it into the [code generator](XSQLite.html) and che
 			<notNull>Product name is required.</notNull>
 			<unique>Product already registered.</unique>
 		</column>
-		<column name="value" type="number" notNull="" min="0.01">
-			<type>Enter the value of the product.</type>
-			<notNull>Product value is required.</notNull>
-			<min>Minimum product value must be $ 0.01.</min>
-		</column>
 	</table>
 	<table name="sales">
 		<column name="client_id" type="id" source="clients">
@@ -348,6 +343,12 @@ Copy the project below, paste it into the [code generator](XSQLite.html) and che
 		<column name="product_id" type="id" source="products">
 			<type>Product not registered.</type>
 		</column>
+		<column name="value" type="number" notNull="" min="0.01">
+			<type>Enter the value of the product.</type>
+			<notNull>Product value is required.</notNull>
+			<min>Minimum product value must be $ 0.01.</min>
+		</column>
+
 	</table>
 </sql>
 ```
