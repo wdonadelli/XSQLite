@@ -37,6 +37,5 @@
 			<notNull>Product value is required.</notNull>
 			<min>Minimum product value must be $ 0.01.</min>
 		</column>
-
 	</table>
 </sql>
