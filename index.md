@@ -348,7 +348,6 @@ Copy the project below, paste it into the [code generator](XSQLite.html) and che
 			<notNull>Product value is required.</notNull>
 			<min>Minimum product value must be $ 0.01.</min>
 		</column>
-
 	</table>
 </sql>
 ```
