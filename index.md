@@ -268,18 +268,18 @@ These triggers will not allow changing or deleting log table data.
 
 ### Products Name
 
-Product                     | Name
---------------------------- | --------------------------------
-Table                       | *tableName*
-Log                         | *_log_tableName*
-View                        | *_vw_tableName*
-Trigger Before Insert       | *_tr_before_insert_tableName*
-Trigger Before Update       | *_tr_before_update_tableName*
-Trigger After Insert        | *_tr_after_insert_tableName*
-Trigger After Update        | *_tr_after_update_tableName*
-Trigger After Delete        | *_tr_after_delete_tableName*
-Trigger Before Update (log) | *_tr_before_update_log_tableName*
-Trigger Before Delete (log) | *_tr_before_delete_log_tableName*
+|Product                     |Name                             |
+|:-------------------------- |:--------------------------------|
+|Table                       |*tableName*                      |
+|Log                         |*_log_tableName*                 |
+|View                        |*_vw_tableName*                  |
+|Trigger Before Insert       |*_tr_before_insert_tableName*    |
+|Trigger Before Update       |*_tr_before_update_tableName*    |
+|Trigger After Insert        |*_tr_after_insert_tableName*     |
+|Trigger After Update        |*_tr_after_update_tableName*     |
+|Trigger After Delete        |*_tr_after_delete_tableName*     |
+|Trigger Before Update (log) |*_tr_before_update_log_tableName*|
+|Trigger Before Delete (log) |*_tr_before_delete_log_tableName*|
 
 ## The code generator
 
