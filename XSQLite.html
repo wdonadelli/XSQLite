@@ -43,13 +43,10 @@ function example() {
 
 <nav class="wd-nav wd-buddy wd-box-opaque-out wd-box-white">
 	<a href="#" data-wd-action="tab{#tab_xml}" data-wd-click="">XML</a>
-	<a href="#" data-wd-action="tab{#tab_sql}" onclick="start();">SQL</a>
-	<span onclick="example();">Example</span>
+	<a href="#" data-wd-action="tab{#tab_sql}" onclick="start();" >SQL</a>
 </nav>
 
 <div class="wd-content">
-
-
 
 	<div>
 		<div id="tab_xml">
@@ -58,6 +55,11 @@ function example() {
 				<textarea id="xml" class="wd-box-green wd-input wd-radius" style="height: 400px" placeholder="XML content"></textarea>
 				<div class="wd-text-small wd-text-blue wd-input-help">Enter the XML code in the field above and click <q>SQL</q> to see the result.</div>
 			</form>
+
+			<footer class="wd-foot">
+				<a href="#" onclick="example();" >Load Example</a>
+			</fotter>
+
 		</div>
 		
 		<div id="tab_sql" class="wd-text-smaller">

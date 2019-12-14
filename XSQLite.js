@@ -1,621 +1,796 @@
 "use strict";
 
+/*-----------------------------------------------------------------------------
+===============================================================================
+								=== Estrutura dos objetos ===
+
+	XSQLite
+		alvo:        sql
+		produto:     construir o script
+		dependência: SQL
+		interação:   externa
+
+		SQL
+			alvo:        sql.table
+			produto:     construir a estrutura SQLite
+			dependência: Table
+			interação:   interna
+
+			Table
+				alvo:        sql.table.column
+				produto:     obter os dados da tabela
+				dependência: Column
+				interação:   interna
+
+				Column
+					alvo:        sql.table.column(attributes|messages)
+					produto:     obter os dados da coluna
+					dependência: -
+					interação:   interna
+
+===============================================================================
+-----------------------------------------------------------------------------*/
+
 var XSQLite = (function() {
-	var NAME, TEXT, BOOL, DATE, FDATE, TIME, FTIME, WIDTH, ATTR, TYPE, SQL;
+	var RE = {
+		NAME:  /^[A-Z]([A-Z0-9\_]+)?$/i,
+		TEXT:  /^[A-Z]+((\ [A-Z]+)+)?$/i,
+		BOOL0: /^(0|FALSE)$/i,
+		BOOL1: /^(1|TRUE)$/i,
+		DATE:  /^[0-9]{4}(\-[0-9]{2}){2}$/,
+		FDATE: /^DATE\(.*\)$/i,
+		TIME:  /^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/,
+		FTIME: /^TIME\(.*\)$/i,
+		TEXTW: /^[1-9]([0-9]+)?$/,
+	}
 
-	/*-- constantes --*/
-	NAME  = /^[A-Z]([A-Z0-9\_]+)?$/i;
-	TEXT  = /^[A-Z]+((\ [A-Z]+)+)?$/i;
-	BOOL  = /^(1|TRUE|0|FALSE)$/i;
-	DATE  = /^[0-9]{4}(\-[0-9]{2}){2}$/;
-	FDATE = /^DATE\(.*\)$/i;
-	TIME  = /^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/;
-	FTIME = /^TIME\(.*\)$/i;
-	WIDTH = /^[1-9]([0-9]+)?$/;
-	/*-- atributos específicos --*/
-	ATTR  = {
-		notNull: getNotNull,
-		unique:  getUnique,
-		default: getDefault,
-		min:     getMin,
-		max:     getMax,
-		like:    getLike,
-		glob:    getGlob,
-		source:  getSource
-	};
-	/*-- atributos específicos de cada tipo --*/
-	TYPE  = {
-		free:     ["notNull", "unique", "default", "min", "max", "like", "glob"],
-		number:   ["notNull", "unique", "default", "min", "max"],
-		text:     ["notNull", "unique", "default", "min", "max"],
-		boolean:  ["notNull", "default"],
-		date:     ["notNull", "unique", "default", "min", "max"],
-		time:     ["notNull", "unique", "default", "min", "max"],
-		id:       ["source"]
-	};
-	/*-- montagem do SQL --*/
-	SQL   = {
-		free:     {column: {}, trigger:{}, message: {}},
-		number:   {column: {}, trigger:{}, message: {}},
-		text:     {column: {}, trigger:{}, message: {}},
-		boolean:  {column: {}, trigger:{}, message: {}},
-		date:     {column: {}, trigger:{}, message: {}},
-		time:     {column: {}, trigger:{}, message: {}},
-		id:       {column: {}, trigger:{}, message: {}}
-	};
-	/*-- montagem SQL:column --*/
-	SQL.free.column = {
-		type:    "@col@ TEXT",
-		unique:  "UNIQUE",
-		notNull: "NOT NULL",
-		default: "DEFAULT(@default@)"
-	};
-	SQL.number.column = {
-		type:    "@col@ NUMBER",
-		unique:  SQL.free.column.unique,
-		notNull: SQL.free.column.notNull,
-		default: SQL.free.column.default
-	};
-	SQL.text.column = {
-		type:    "@col@ TEXT",
-		unique:  SQL.free.column.unique,
-		notNull: SQL.free.column.notNull,
-		default: SQL.free.column.default
-	};
-	SQL.boolean.column = {
-		type:    "@col@ INTEGER",
-		notNull: SQL.free.column.notNull,
-		default: SQL.free.column.default
-	};
-	SQL.date.column = {
-		type:    "@col@ TEXT",
-		unique:  SQL.free.column.unique,
-		notNull: SQL.free.column.notNull,
-		default: SQL.free.column.default
-	};
-	SQL.time.column = {
-		type:    "@col@ TEXT",
-		unique:  SQL.free.column.unique,
-		notNull: SQL.free.column.notNull,
-		default: SQL.free.column.default
-	};
-	SQL.id.column = {
-		type:   "@col@ INTEGER",
-		source: "FOREIGN KEY(@col@) REFERENCES @source@(_id_) ON UPDATE CASCADE"
-	};
-	/*-- montagem SQL: trigger --*/
-	SQL.free.trigger = {
-		unique:  "(SELECT COUNT(*) FROM @tab@ WHERE @col@ = new.@col@) > 0",
-		notNull: "new.@col@ IS NULL OR TRIM(new.@col@) = ''",
-		min:     "new.@col@ < @min@",
-		max:     "new.@col@ > @max@",
-		glob:    "new.@col@ NOT GLOB @glob@",
-		like:    "new.@col@ NOT LIKE @like@"
-	};
-	SQL.number.trigger = {
-		type:    "UPPER(TYPEOF(new.@col@)) NOT IN ('INTEGER', 'REAL')",
-		unique:  SQL.free.trigger.unique,
-		notNull: SQL.free.trigger.notNull,
-		min:     SQL.free.trigger.min,
-		max:     SQL.free.trigger.max
-	};
-	SQL.text.trigger = {
-		type:    "UPPER(new.@col@) GLOB '*[^A-Z ]*' OR UPPER(new.@col@) NOT GLOB '[A-Z]*[A-Z]' OR new.@col@ GLOB '*  *'",
-		unique:  "(SELECT COUNT(*) FROM @tab@ WHERE UPPER(@col@) = UPPER(new.@col@)) > 0",
-		notNull: SQL.free.trigger.notNull,
-		min:     "LENGTH(new.@col@) < @min@",
-		max:     "LENGTH(new.@col@) > @max@"
-	};
-	SQL.boolean.trigger = {
-		type:    "new.@col@ NOT IN (0,1)",
-		notNull: SQL.free.trigger.notNull
-	};
-	SQL.date.trigger = {
-		type:   "DATE(new.@col@, '+1 day', '-1 day') != new.@col@",
-		unique:  SQL.free.trigger.unique,
-		notNull: SQL.free.trigger.notNull,
-		min:     SQL.free.trigger.min,
-		max:     SQL.free.trigger.max
-	};
-	SQL.time.trigger = {
-		type:    "TIME(new.@col@) IS NULL OR new.@col@ NOT GLOB '[0-2][0-9]:[0-5][0-9]*'",
-		unique:  SQL.free.trigger.unique,
-		notNull: SQL.free.trigger.notNull,
-		min:     SQL.free.trigger.min,
-		max:     SQL.free.trigger.max
-	};
-	SQL.id.trigger = {
-		type: "new.@col@ IS NULL OR (SELECT COUNT(*) FROM @source@ WHERE _id_ = new.@col@) != 1"
-	};
-	/*-- montagem SQL:messages --*/
-	SQL.free.message = {
-		type:    "@col@: Enter a textual value",
-		unique:  "@col@: Existing registration.",
-		notNull: "@col@: Required value.",
-		min:     "@col@: Value less than allowed.",
-		max:     "@col@: Greater than allowed value.",
-		glob:    "@col@: Value in the wrong format.",
-		like:    "@col@: Value in the wrong format."
-	};
-	SQL.number.message = {
-		type:    "@col@: The value must be numeric.",
-		unique:  SQL.free.message.unique,
-		notNull: SQL.free.message.notNull,
-		min:     SQL.free.message.min,
-		max:     SQL.free.message.min
-	};
-	SQL.text.message = {
-		type:    "@col@: Enter only letters and simple spaces.",
-		unique:  SQL.free.message.unique,
-		notNull: SQL.free.message.notNull,
-		min:     "@col@: Amount of characters less than allowed.",
-		max:     "@col@: Amount of characters greater than allowed."
-	};
-	SQL.boolean.message = {
-		type:    "@col@: The value must be boolean (1 or 0).",
-		notNull: SQL.free.message.notNull
-	};
-	SQL.date.message = {
-		type:    "@col@: Enter a valid date.",
-		unique:  SQL.free.message.unique,
-		notNull: SQL.free.message.notNull,
-		min:     SQL.free.message.min,
-		max:     SQL.free.message.min
-	};
-	SQL.time.message = {
-		type:    "@col@: Enter a valid time.",
-		unique:  SQL.free.message.unique,
-		notNull: SQL.free.message.notNull,
-		min:     SQL.free.message.min,
-		max:     SQL.free.message.min
-	};
-	SQL.id.message = {
-		type: "@col@: Register not found in table @source@"
-	};
-
-	/*-- funções privadas --*/
-	function start(xml) {
-		var sql, tables, columns, values, tab, col, type, swap, attr, msg, re;
-		values = {};
-		/*-- obtendo root --*/
-		sql = xml.getElementsByTagName("sql");
-		if (sql.length !== 1) throw Error("XML root element (sql) not found or more than one reported.");
-		/*-- obtendo tabelas --*/
-		tables = sql[0].getElementsByTagName("table");
-		if (tables.length === 0) throw Error("Tables not found.");
-		/*-- looping nas tabelas --*/
-		for (var t = 0; t < tables.length; t++) {
-			/*-- obtendo o nome das tabelas --*/
-			tab = getName(tables[t]);
-			if (tab === false) throw Error("#"+t+": The table's name attribute is in the wrong format or not defined.");
-			/*-- definindo tabelas em values --*/
-			if (tab in values) throw Error(tab+": Table name already used.");
-			values[tab] = {};
-			/*-- obtendo as colunas da tabela --*/
-			columns = tables[t].getElementsByTagName("column");
-			if (columns.length === 0) throw Error(tab+": Columns not found.");
-			/*-- looping nas tabelas --*/
-			for (var c = 0; c < columns.length; c++) {
-				/*-- obtendo o nome das colunas --*/ 
-				col = getName(columns[c]);
-				if (col === false) throw Error([tab,"#"+c].join(".")+": The column's name attribute is in the wrong format or not defined.");
-				/*-- definindo colunas em values --*/
-				if (col in values) throw Error([tab,col].join(".")+": Column name already used.");
-				values[tab][col] = {};
-				/*-- obtendo atributos das colunas --*/
-				swap = {};
-				swap.tab  = tab;
-				swap.col  = col;
-				swap.type = getType(columns[c]);
-				swap.msg  = {};
-				for (var a in ATTR) {
-					/*-- verificando se o atributo existe para o tipo --*/
-					if (TYPE[swap.type].indexOf(a) < 0) {
-						continue;
-					}
-					/*-- obtendo atributo individual --*/
-					attr = ATTR[a](columns[c]);
-					if (attr === false) throw Error([tab,col,a].join(".")+": Badly formatted attribute.");
-					/*-- adicionando o atributo a swap caso exista --*/
-					if (attr === null) {
-						continue;
-					} else {
-						swap[a] = attr;
-					}
-				}
-				/*-- obtendo as mensagens definidas no xml --*/
-				for (var m in SQL[swap.type].message) {
-					msg = columns[c].getElementsByTagName(m);
-					swap.msg[m] = msg.length === 0 ? SQL[swap.type].message[m] : msg[0].childNodes[0].nodeValue;
-				}
-				/*-- definindo values: objetos SQL --*/
-				for (var x in SQL[getType(columns[c])]) {
-					if (!(x in values[tab][col])) {
-						values[tab][col][x] = {};
-					}
-					/*-- definindo values: valores SQL (se existente apenas) --*/
-					for (var y in SQL[getType(columns[c])][x]) {
-						if (y in swap) {
-							if (x === "message" && y in swap.msg) {
-								values[tab][col][x][y] = swap.msg[y];
-							} else {
-								values[tab][col][x][y] = SQL[getType(columns[c])][x][y];
-							}
-							/*-- definindo values: trocando referência por valores reais --*/
-							for (var z in swap) {
-								re = new RegExp("@"+z+"@", "g");
-								values[tab][col][x][y] = values[tab][col][x][y].replace(re, swap[z]);
-							}
-						}
-					}
-				}
-			}
+	/*__ Personalizando mensagens de erro ____________________________________*/
+	function XSQLiteError(message) {
+		if (!(this instanceof XSQLiteError)) {
+			return new XSQLiteError(message);
 		}
-		return values;
-	};
+		this.name = "XSQLiteError";
+		this.message = message || "Unknown error.";
+		this.description = message;
+		this.stack = (new Error()).stack;
+	}
 
-	function getName(xml) {
-		var x = xml.getAttribute("name");
-		return NAME.test(x) !== true || x === null ? false : x;
-	};
+	XSQLiteError.prototype = Object.create(Error.prototype, {
+		constructor: {value: XSQLiteError},
+	});
 
-	function getType(xml) {
-		var x = new String(xml.getAttribute("type")).toLowerCase();
-		return x in TYPE ? x : "free";
-	};
-
-	function getNotNull(xml) {
-		var x = xml.getAttribute("notNull");
-		return x === null ? null : true;
-	};
-
-	function getUnique(xml) {
-		var x = xml.getAttribute("unique");
-		return x === null ? null : true;
-	};
-
-	function getLike(xml) {
-		var x = xml.getAttribute("like");
-		return x === null ? null : "'"+x+"'";
-	};
-
-	function getGlob(xml) {
-		var x = xml.getAttribute("glob");
-		return x === null ? null : "'"+x+"'";
-	};
-
-	function getSource(xml) {
-		var x = xml.getAttribute("source");
-		return NAME.test(x) !== true || x === null ? false : x;
-	};
-
-	function getDefault(xml) {
-		var x, type;
-		x = xml.getAttribute("default");
-		type = getType(xml)
-		if (x === null) {
-			x = null;
-		} else if (type === "free") {
-			x = "'"+x+"'";
-		} else if (type === "number") {
-			x = !isNaN(x) ? x : false;
-		} else if (type === "text") {
-				x = TEXT.test(x) === true ? "'"+x+"'" : false;
-		} else if (type === "boolean") {
-			if (BOOL.test(x.toLowerCase()) !== true) {
-				x = false;
-			} else {
-				x = ["true", "1"].indexOf(x.toLowerCase()) >= 0 ? 1 : 0;
-			}
-		} else if (type === "date") {
-			if (DATE.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FDATE.test(x) !== true) {
-				x = false;
-			}
-		} else if (type === "time") {
-			if (TIME.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FTIME.test(x) !== true) {
-				x = false;
-			}
-		} else {
-				x = null;
-		}
-		return x;
-	};
-
-	function getMin(xml) {
-		var x, type;
-		x = xml.getAttribute("min");
-		type = getType(xml)
-		if (x === null) {
-			x = null;
-		} else if (type === "free") {
-			x = "'"+x+"'";
-		} else if (type === "number") {
-			x = !isNaN(x) ? x : false;
-		} else if (type === "text") {
-				x = WIDTH.test(x) === true ? x : false;
-		} else if (type === "date") {
-			if (DATE.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FDATE.test(x) !== true) {
-				x = false;
-			}
-		} else if (type === "time") {
-			if (TIME.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FTIME.test(x) !== true) {
-				x = false;
-			}
-		} else {
-				x = null;
-		}
-		return x;
-	};
-
-	function getMax(xml) {
-		var x, type;
-		x = xml.getAttribute("max");
-		type = getType(xml)
-		if (x === null) {
-			x = null;
-		} else if (type === "free") {
-			x = "'"+x+"'";
-		} else if (type === "number") {
-			x = !isNaN(x) ? x : false;
-		} else if (type === "text") {
-				x = WIDTH.test(x) === true ? x : false;
-		} else if (type === "date") {
-			if (DATE.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FDATE.test(x) !== true) {
-				x = false;
-			}
-		} else if (type === "time") {
-			if (TIME.test(x) === true) {
-				x = "'"+x+"'";
-			} else if (FTIME.test(x) !== true) {
-				x = false;
-			}
-		} else {
-				x = null;
-		}
-		return x;
-	};
-
-	/*-- Objetos SQLite --*/
-	function createColumn(cname, col) {
-		var sql, constraints;
-		sql = [];
-		/*-- obtendo as restrições da coluna --*/
-		constraints = ["type", "unique", "notNull", "default"];
-		for (var i = 0; i < constraints.length; i++) {
-			if (constraints[i] in col) {
-				sql.push(col[constraints[i]]);
-			}
-		}
-		return sql.join(" ");
-	};
-
-	function createTable(tname, cols) {
-		var sql, col, key;
-		sql = [];
-		col = [];
-		key = [];
-		/*-- obtendo colunas e chaves --*/
-		col.push("_id_ INTEGER PRIMARY KEY AUTOINCREMENT");
-		for (var cname in cols) {
-			col.push(createColumn(cname, cols[cname].column));
-			if ("source" in cols[cname].column) {
-				key.push(cols[cname].column.source);
-			}
-		}
-		/*-- transferindo as chaves para as colunas --*/
-		for (var k = 0; k < key.length; k++) {
-			col.push(key[k]);
-		}
-		/*-- construindo a tabela --*/
-		sql.push("CREATE TABLE IF NOT EXISTS "+tname+" (");
-		sql.push("\t"+col.join(",\n\t"));
-		sql.push(");");
-		return sql.join("\n");
-	};
-
-	function createTableLog(tname, cols) {
-		var sql, col, key;
-		sql = [];
-		col = [];
-		key = [];
-		/*-- obtendo colunas e chaves --*/
-		col.push("_log_ TEXT DEFAULT(DATETIME('now', 'localtime'))");
-		col.push("_event_ INTEGER CHECK(_event_ IN (0, 1, 2))");
-		col.push("_id_ INTEGER");
-		for (var cname in cols) {
-			col.push(cols[cname].column.type);
-		}
-		/*-- construindo a tabela --*/
-		sql.push("CREATE TABLE IF NOT EXISTS _"+tname+"_ (");
-		sql.push("\t"+col.join(",\n\t"));
-		sql.push(");");
-		return sql.join("\n");
-	};
-
-	function createCase(cname, col, event) {
-		var sql, when, constraints;
-		sql  = [];
-		when = [];
-		/*-- obtendo as restrições --*/
-		constraints = ["notNull", "unique", "type", "min", "max", "glob", "like"];
-		for (var i = 0; i < constraints.length; i++) {
-			/*-- ON INSERT --*/
-			if (constraints[i] in col.trigger && event === 0) {
-				/*-- quando não aceitar nulo: verificar restrição --*/
-				if ("notNull" in col.trigger || "source" in col.column || cname === "_id_") {
-					when.push("WHEN ("+col.trigger[constraints[i]]+") THEN");
-				/*-- quando aceitar nulo: verificar a restrição se o valor não for nulo --*/
-				} else {
-					when.push("WHEN (new."+cname+" IS NOT NULL) AND ("+col.trigger[constraints[i]]+") THEN");
-				}
-				when.push("\tRAISE(ABORT, '"+col.message[constraints[i]]+"')");
-			}
-			/*-- ON UPDATE (não verificar a restrição se o valor não mudou) --*/
-			if (constraints[i] in col.trigger && event === 1) {
-				/*-- quando não aceitar nulo: verificar restrição --*/
-				if (cname === "_id_") {
-					when.push("WHEN ("+col.trigger[constraints[i]]+") THEN");
-				} else if ("notNull" in col.trigger || "source" in col.column || cname === "_id_") {
-					when.push("WHEN (new."+cname+" != old."+cname+") AND ("+col.trigger[constraints[i]]+") THEN");
-				/*-- quando aceitar nulo: verificar a restrição se o valor não for nulo --*/
-				} else {
-					when.push("WHEN (new."+cname+" IS NOT NULL AND new."+cname+" != old."+cname+") AND ("+col.trigger[constraints[i]]+") THEN");
-				}
-				when.push("\tRAISE(ABORT, '"+col.message[constraints[i]]+"')");
-			}
-		}
-		/*-- construindo cases --*/
-		sql.push("SELECT CASE");
-		sql.push("\t\t"+when.join("\n\t\t"));
-		sql.push("\tEND;\n");
-		return sql.join("\n");
-	};
-
-	function createTriggerBefore(tname, cols, event) {
-		var sql, cases, id, name;
-		sql   = [];
-		cases = [];
-		id    = {};
-		/*-- para atualização: impedir mudança no id --*/
-		if (event === 1) {
-			id.column  = {};
-			id.trigger = {type: "new._id_ != old._id_"};
-			id.message = {type: "The table identifier (_id_) cannot be changed."};
-			cases.push(createCase("_id_", id, event));
-		}
-		/*-- obtendo demais cases --*/
-		for (var cname in cols) {
-			cases.push(createCase(cname, cols[cname], event));
-		}
-		/*-- construindo o trigger --*/
-		if (event === 0) {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_before_insert_"+tname+"_ BEFORE INSERT ON "+tname+" BEGIN\n");
-		} else if (event === 1) {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_before_update_"+tname+"_ BEFORE UPDATE ON "+tname+" BEGIN\n");
-		}
-		sql.push("\t"+cases.join("\n\t"));
-		sql.push("END;");
-		return sql.join("\n");
-	};
-
-	function createInsertLog(tname, cols, event) {
-		var sql, col, val;
-		sql = [];
-		col = [];
-		val = []
-		/*-- obtendo colunas e valores --*/
-		col.push("_event_");
-		val.push(event);
-		col.push("_id_");
-		val.push(event === 0 ? "new._id_" : "old._id_");
-
-		/*-- looping in columns --*/
-		for (var cname in cols) {
-			col.push(cname);
-			val.push(event === 2 ? "NULL" : "new."+cname);
-		}
-		/*-- construindo o insert --*/
-		sql.push("\tINSERT INTO _"+tname+"_ (");
-		sql.push("\t\t"+col.join(",\n\t\t"));
-		sql.push("\t) VALUES (");
-		sql.push("\t\t"+val.join(",\n\t\t"));
-		sql.push("\t);");
-		return sql.join("\n");
-	};
-
-	function createTriggerAfter(tname, cols, event) {
-		var sql;
-		sql   = [];
-		/*-- construindo o trigger --*/
-		if (event === 0) {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_insert_"+tname+"_ AFTER INSERT ON "+tname+" BEGIN\n");
-		} else if (event === 1) {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_update_"+tname+"_ AFTER UPDATE ON "+tname+" BEGIN\n");
-		} else {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_delete_"+tname+"_ AFTER DELETE ON "+tname+" BEGIN\n");
-		}
-		sql.push(createInsertLog(tname, cols, event));
-		sql.push("\nEND;");
-		return sql.join("\n");
-	};
-
-	function createTriggerBeforeLog(tname, event) {
-		var sql;
-		sql   = [];
-		/*-- construindo o trigger --*/
-		if (event === 1) {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_update_log_"+tname+"_ AFTER UPDATE ON _"+tname+"_ BEGIN\n");
-		} else {
-			sql.push("CREATE TRIGGER IF NOT EXISTS _tr_after_delete_log_"+tname+"_ AFTER DELETE ON _"+tname+"_ BEGIN\n");
-		}
-		sql.push("\tSELECT");
-		sql.push("\t\tRAISE(ABORT, 'The log table cannot be changed!')");
-		sql.push("\tEND;");
-		sql.push("\nEND;");
-		return sql.join("\n");
-	};
-
-	/*-- Constructor --*/
-	function XSQLite(xml) {
+	/*__ Construtor do objeto SQL ____________________________________________*/
+	function XSQLite(txt) {
 		if (!(this instanceof XSQLite)) {
-			return new XSQLite(xml);
+			return new XSQLite(txt);
 		}
-		var xml, obj, log;
+		var obj, xml, sql;
 		if (window.DOMParser) {
-			obj  = new DOMParser();
-			xml = obj.parseFromString(xml, "text/xml");
+			obj = new DOMParser();
+			xml = obj.parseFromString(txt, "text/xml");
 		} else {
 			xml = new ActiveXObject("Microsoft.XMLDOM");
 			xml.async = false;
-			xml.loadXML(xml);
+			xml.loadXML(txt);
 		}
-		Object.defineProperties(this, {
-			xml: {
-				value: start(xml)
-			}
-		});
-		return
-	};
+		sql = xml.getElementsByTagName("sql");
+		if (sql.length !== 1) this.error("XML root element (sql) not found or more than one reported.");
 
+		Object.defineProperty(this, "sql", {value: new SQL(sql[0])});
+	}
+
+	/*__ Construtor do objeto XSQLite ________________________________________*/
 	Object.defineProperties(XSQLite.prototype, {
 		constructor: {
 			value: XSQLite
 		},
 		version: {
 			enumerable: true,
-			value: "1.0.0"
+			value: "v2.0.0"
+		},
+		error: {
+			value: function(msg) {
+				if (msg !== undefined) throw XSQLiteError(msg);
+				return;
+			}
 		},
 		toSQL: {
 			enumerable: true,
 			value: function() {
-				var sql, tabs;
-				sql = ["-- Created by XSQLite v"+this.version+" [https://github.com/wdonadelli/XSQLite] --"];
+				var sql, tabs, separator;
+				separator = "\n\n-------------------------------------------------------------------------------\n\n";
+				sql = [];
+				sql.push("-- Created by XSQLite "+ this.version+ " [https://github.com/wdonadelli/XSQLite] --");
+
 				sql.push("PRAGMA foreign_keys = ON;");
-				for (var tname in this.xml) {
-					sql.push(createTable(tname, this.xml[tname]));
-					sql.push(createTableLog(tname, this.xml[tname]));
-					sql.push(createTriggerBefore(tname, this.xml[tname], 0));
-					sql.push(createTriggerBefore(tname, this.xml[tname], 1));
-					sql.push(createTriggerAfter(tname, this.xml[tname], 0));
-					sql.push(createTriggerAfter(tname, this.xml[tname], 1));
-					sql.push(createTriggerAfter(tname, this.xml[tname], 2));
-					sql.push(createTriggerBeforeLog(tname, 1));
-					sql.push(createTriggerBeforeLog(tname, 2));
-				}
-				return sql.join("\n\n------------------------------------------------------\n\n");
+				/*-- table --*/
+				sql.push(this.sql.table().join(separator));
+				/*-- log --*/
+				sql.push(this.sql.log().join(separator));
+				/*-- view --*/
+				sql.push(this.sql.view().join(separator));
+				/*-- triggers --*/
+				sql.push(this.sql.trigger("before", "insert").join(separator));
+				sql.push(this.sql.trigger("before", "update").join(separator));
+				sql.push(this.sql.trigger("after", "insert").join(separator));
+				sql.push(this.sql.trigger("after", "update").join(separator));
+				sql.push(this.sql.trigger("after", "delete").join(separator));
+				sql.push(this.sql.logTrigger("update").join(separator));
+				sql.push(this.sql.logTrigger("delete").join(separator));
+				return sql.join(separator);
 			}
 		}
 	});
 
+/*===========================================================================*/
+
+	/*__ Construtor do objeto SQL ____________________________________________*/
+	function SQL(object) {
+		this.xml = object;
+		/*-- Obter tabelas --*/
+		var tabs, list;
+		tabs = {};
+		list = object.getElementsByTagName("table");
+		if (list.length === 0) this.error("Tables not found.");
+		for (var tab = 0; tab < list.length; tab++) {
+			var temp, name;
+			temp = new Table(list[tab], tab);
+			name = temp.name();
+			if (name in tabs) this.error("The table name \"" + name + "\" has already been used.");
+			tabs[name] = temp;
+		}
+		this.tabs = tabs;
+	}
+
+	/*__ Protótipo do objeto SQL _____________________________________________*/
+	SQL.prototype.constructor = SQL;
+
+	SQL.prototype.error = function(msg) {
+		if (msg !== undefined) throw XSQLiteError(msg);
+		return;
+	}
+
+	SQL.prototype.concat = function(list1, list2) {
+		for (var i = 0; i < list2.length; i++) {
+			list1.push(list2[i]);
+		}
+		return list1;
+	}
+
+	SQL.prototype.table = function() {
+		var x, sql;
+		x = [];
+		for (var t in this.tabs) {
+			sql  = [];
+			sql.push("CREATE TABLE IF NOT EXISTS " + this.tabs[t].name() + " (");
+			sql.push("\t" + this.tabs[t].table().join(",\n\t"))
+			sql.push(");");
+			x.push(sql.join("\n"));
+		}
+		return x;
+	}
+
+	SQL.prototype.log = function() {
+		var x, sql;
+		x = [];
+		for (var t in this.tabs) {
+			sql  = [];
+			sql.push("CREATE TABLE IF NOT EXISTS _log_" + this.tabs[t].name() + " (");
+			sql.push("\t" + this.tabs[t].log().join(",\n\t"))
+			sql.push(");");
+			x.push(sql.join("\n"));
+		}
+		return x;
+	}
+
+	SQL.prototype.view = function() {
+		var x, sql, cols, links, inner, control;
+		x = [];
+		for (var t in this.tabs) {
+			sql     = [];
+			inner   = []
+			cols    = this.tabs[t].view();
+			links   = this.tabs[t].links();
+			control = [];
+			/*-- views com chaves estrangeiras --*/
+			for (var col in links) {
+				var tab = links[col];
+				if (!(tab in this.tabs)) this.error("Table \"" + tab + "\" was not defined in the project.");
+				if (control.indexOf(tab) < 0) {
+					control.push(tab);
+					cols = this.concat(cols, this.tabs[tab].view(true));
+				}
+				inner.push(this.tabs[tab].innerJoin(t+"."+col));
+			}
+			sql.push("CREATE VIEW IF NOT EXISTS _vw_" + this.tabs[t].name() + " AS SELECT");
+			sql.push("\t" + cols.join(",\n\t"))
+			sql.push("\tFROM " + this.tabs[t].name())
+			if (inner.length > 0) {
+				sql.push("\t" + inner.join("\n\t"));
+			}
+			sql.push(";");
+			x.push(sql.join("\n"));
+		}
+		return x;
+	}
+
+	SQL.prototype.trigger = function(time, action) {
+		var x, sql, proc, name, type;
+		x = [];
+		type = time.toUpperCase() + " " + action.toUpperCase();
+		for (var t in this.tabs) {
+			name  = "_tr_" + time + "_" + action + "_" + this.tabs[t].name();
+			sql   = [];
+			proc = time === "before" ? this.tabs[t].cases(time, action) : this.tabs[t].register(time, action);
+			sql.push("CREATE TRIGGER IF NOT EXISTS " + name + " " + type + " ON " + this.tabs[t].name() + " BEGIN\n");
+			sql.push(proc);
+			sql.push("\nEND;");
+			x.push(sql.join("\n"));
+		}
+		return x;
+	}
+
+	SQL.prototype.logTrigger = function(action) {
+		var x, sql, proc, name, type;
+		x = [];
+		type = "BEFORE " + action.toUpperCase();
+		for (var t in this.tabs) {
+			name  = "_tr_before_" + action + "_log_" + this.tabs[t].name();
+			sql   = [];
+			sql.push("CREATE TRIGGER IF NOT EXISTS " + name + " " + type + " ON _log_" + this.tabs[t].name() + " BEGIN");
+			sql.push("\tSELECT RAISE(ABORT, 'The log table cannot be changed!') END;");
+			sql.push("END;");
+			x.push(sql.join("\n"));
+		}
+		return x;
+	}
+
+/*===========================================================================*/
+
+	/*__ Construtor do objeto Tabelas ________________________________________*/
+	function Table(object, tab) {
+		this.xml = object;
+		this.tab = tab;
+		/*-- Obter colunas --*/
+		var cols, list, name;
+		cols = {};
+		list = object.getElementsByTagName("column");
+		if (list.length === 0) this.error("Columns not found.");
+		for (var col = 0; col < list.length; col++) {
+			var temp, name;
+			temp = new Column(list[col], this.name(), col);
+			name = temp.name();
+			if (name in cols) this.error("The column name \""+name+"\" has already been used.");
+			cols[name] = temp;
+		}
+		this.cols = cols;
+	}
+
+	/*__ Protótipo do objeto Tabela __________________________________________*/
+	Table.prototype.constructor = Table;
+
+	Table.prototype.error = function(msg) {
+		var id = " \> table(" + this.tab+")";
+		if (msg !== undefined) throw XSQLiteError(msg+id);
+		return;
+	}
+
+	Table.prototype.name = function() {
+		var x, re;
+		re = /^[A-Z]([A-Z0-9\_]+)?$/i;
+		x  = this.xml.getAttribute("name");
+		if (x === null || !re.test(x)) this.error("The table's name attribute is in the wrong format or not defined");
+		this.tab = x;
+		return x;
+	}
+
+	Table.prototype.colNames = function(full) {
+		var x = [];
+		for (var col in this.cols) {
+			x.push(full === true ? this.cols[col].fullName() : this.cols[col].name());
+		}
+		return x;
+	}
+
+	Table.prototype.table = function() {
+		var x, f;
+		x = [];
+		f = [];
+		x.push("_id_ INTEGER PRIMARY KEY AUTOINCREMENT");
+		for (var col in this.cols) {
+			var value, fkey;
+			value = this.cols[col].getColumns();
+			fkey  = this.cols[col].getForeignKey();
+			x.push(value.join(" "));
+			if (fkey.length > 0) f.push(fkey[0]);
+		}
+		for (var i = 0; i < f.length; i++) {x.push(f[i]);}
+		return x;
+	}
+
+	Table.prototype.view = function(noID) {
+		var x, value;
+		x = [];
+		if (noID !== true) {
+			x.push(this.tab + "._id_ AS '" + this.tab + "._id_'");
+		}
+		for (var col in this.cols) {
+			value = this.cols[col].getView();
+			x.push(value.join(" "));
+		}
+		return x;
+	}
+
+	Table.prototype.log = function() {
+		var x;
+		x = [];
+		x.push("_log_ TEXT DEFAULT(DATETIME('now', 'localtime'))");
+		x.push("_event_ INTEGER CHECK(_event_ IN (0, 1, 2))");
+		x.push("_id_ INTEGER");
+		for (var col in this.cols) {
+			var value = this.cols[col].getLogColumns();
+			x.push(value.join(" "));
+		}
+		return x;
+	}
+
+	Table.prototype.links = function() {
+		var x = {};
+		for (var col in this.cols) {
+			if (this.cols[col].type() === "key") {
+				x[col] = this.cols[col].getAttr("table");
+			}
+		}
+		return x;
+	}
+
+	Table.prototype.innerJoin = function(target) {
+		return "INNER JOIN " + this.name() + " ON " + this.name() + "._id_ = " + target;
+	}
+
+	Table.prototype.cases = function(time, action) {
+		var x, y, wh, th, it;
+		x  = [];
+		it = 1;
+		if (time === "before" && action === "update") {
+			it = 0;
+			y  = [];
+			y.push("\tSELECT CASE");
+			y.push("\t\tWHEN new._id_ != old._id_");
+			y.push("\t\tTHEN RAISE(ABORT, 'The table identifier cannot be changed.')");
+			y.push("\tEND;");
+			x.push(y.join("\n"));
+		}
+		for (var col in this.cols) {
+			y = [];
+			wh = this.cols[col].getWhen();
+			th = this.cols[col].getThen();
+			y.push("\tSELECT CASE");
+			for(var i = it; i < wh.length; i++) {
+				y.push("\t\tWHEN " + wh[i]);
+				y.push("\t\tTHEN " + th[i]);
+			}
+			y.push("\tEND;");
+			x.push(y.join("\n"));
+		}
+		return x.join("\n\n");
+	}
+
+	Table.prototype.register = function(time, action) {
+		var x, ev, col, val, list;
+		x   = [];
+		ev  = {insert: 0, update: 1, delete: 2};
+		col = ["_event_", "_id_"];
+		if (action === "delete") {
+			val = [ev[action], "old._id_"];
+		} else {
+			val = [ev[action], "new._id_"];
+			list = this.colNames()
+			for (var i = 0; i < list.length; i++) {
+				col.push(list[i]);
+				val.push("new." + list[i]);
+			}
+		}
+		x.push("\tINSERT INTO _log_" + this.tab + " (");
+		x.push("\t\t" + col.join(",\n\t\t"));
+		x.push("\t) VALUES (");
+		x.push("\t\t" + val.join(",\n\t\t"));
+		x.push("\t);");
+		return x.join("\n");
+	}
+
+/*===========================================================================*/
+
+	/*__ Construtor do objeto Column _________________________________________*/
+	function Column(object, tab, col, inherit) {
+		this.xml = object;
+		this.tab = tab;
+		this.col = col;
+	}
+
+	/*__ Protótipo do objeto Column __________________________________________*/
+	Column.prototype.constructor = Column;
+
+	Column.prototype.types = ["text", "number", "boolean", "date", "time", "key"];
+
+	/*__ métodos _____________________________________________________________*/
+	Column.prototype.getAttr = function(attr) {
+		return this.xml.getAttribute(attr);
+	}
+
+	Column.prototype.type = function() {
+		var x = new String(this.getAttr("type")).toLowerCase();
+		return (this.types.indexOf(x) < 0) ? "free" : x;
+	}
+
+	Column.prototype.error = function(msg) {
+		var id = " \> table(" + this.tab + ").column(" + this.col + ")";
+		if (msg !== undefined) throw XSQLiteError(msg+id);
+		return;
+	}
+
+	Column.prototype.name = function() {
+		var x, re;
+		re = RE.NAME;
+		x  = this.getAttr("name");
+		if (x === null || !re.test(x)) this.error("The column's name attribute is in the wrong format or not defined.");
+		this.col = x;
+		return x;
+	}
+
+	Column.prototype.fullName = function() {
+		return this.tab + "." + this.col;
+	}
+
+	/*__ Columns _____________________________________________________________*/
+
+	Column.prototype.tbConstraints = ["name", "tbType" , "tbUnique", "tbNotNull" , "tbDefault"];
+
+	Column.prototype.getColumns = function() {
+		return this.getConstraints(this.tbConstraints);
+	}
+
+	Column.prototype.tbType = function() {
+		var cons, type;
+		cons = ["TEXT", "INTEGER", "NUMBER"];
+		type = {free: 0, text: 0, number: 2, boolean: 1, date: 0, time: 0, key: 1};
+		return cons[type[this.type()]];
+	}
+
+	Column.prototype.tbNotNull = function() {
+		var cons, type;
+		cons = this.getAttr("notnull") === null ? null : "NOT NULL";
+		type = {free: cons, text: cons, number: cons, boolean: cons, date: cons, time: cons, key: "NOT NULL"};
+		return type[this.type()];
+	}
+
+	Column.prototype.tbUnique = function() {
+		var cons, type;
+		cons = this.getAttr("unique") === null ? null : "UNIQUE";
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.tbDefault = function() {
+		var cons, type;
+		cons = this.getAttr("default") === null ? null : this.getDefault();
+		type = {free: cons, text: cons, number: cons, boolean: cons, date: cons, time: cons, key: null};
+		return type[this.type()] !== null ? "DEFAULT(" + type[this.type()] + ")" : null;
+	}
+
+	/*__ Foreign Keys ________________________________________________________*/
+
+	Column.prototype.fkConstraints = ["fkTable"];
+
+	Column.prototype.getForeignKey = function() {
+		return this.getConstraints(this.fkConstraints);
+	}
+
+	Column.prototype.fkTable = function() {
+		var cons, type, val;
+		if (this.type() === "key") {
+			cons = this.getAttr("table");
+			if (cons === null) this.error("The attribute \"table\" is required for the column of type \"key\".");
+			if (!RE.NAME.test(cons)) this.error("Badly formatted attribute (table).");
+			val = ["FOREIGN KEY(" + this.col + ") REFERENCES " + cons + "(_id_) ON UPDATE CASCADE"];
+		}
+		type = {free: null, text: null, number: null, boolean: null, date: null, time: null, key: val};
+		return type[this.type()];
+	}
+
+	/*__ Log _________________________________________________________________*/
+
+	Column.prototype.logConstraints = ["name", "tbType"];
+
+	Column.prototype.getLogColumns = function() {
+		return this.getConstraints(this.logConstraints);
+	}
+
+	/*__ View ________________________________________________________________*/
+
+	Column.prototype.vwConstraints = ["vwType", "vwAS"];
+	
+	Column.prototype.getView = function() {
+		return this.getConstraints(this.vwConstraints);
+	}
+
+	Column.prototype.vwType = function() {
+		var type = {
+			free:    "TRIM(" + this.fullName() + ")",
+			text:    "UPPER(" + this.fullName() + ")",
+			number:  "PRINTF('%f', " + this.fullName() + ")",
+			boolean: "CASE " + this.fullName() + " WHEN 0 THEN 'False' WHEN 1 THEN 'True' END",
+			date:    "STRFTIME('%Y-%m-%d', " + this.fullName() + ")",
+			time:    "STRFTIME('%H:%M:%S', " + this.fullName() + ")",
+			key:     this.fullName()
+		};
+		return type[this.type()];
+	}
+
+	Column.prototype.vwAS = function() {
+		return "AS '" + this.fullName() + "'";
+	}
+
+/*__ Inner Join _____________________________________________________________*/
+
+//INNER JOIN tab2 ON tab2._id_ = tab1.col7
+
+/*__ Trigger: when/then _____________________________________________________*/
+
+	Column.prototype.whConstraints = ["whId", "whNotNull", "whType", "whUnique", "whMin", "whMax", "whGlob", "whLike"];
+
+	Column.prototype.thConstraints = ["thId", "thNotNull", "thType", "thUnique", "thMin", "thMax", "thGlob", "thLike"];
+
+	Column.prototype.getWhen = function() {
+		return this.getConstraints(this.whConstraints);
+	}
+
+	Column.prototype.getThen = function() {
+		return this.getConstraints(this.thConstraints);
+	}
+
+	Column.prototype.whId = function() {
+		return "new." + this.col + " = old." + this.col;
+	}
+
+	Column.prototype.thId = function() {
+		return "NULL";
+	}
+
+	Column.prototype.whNotNull = function() {
+		var cons, type;
+		cons = "new." + this.col + " IS NULL";
+		type = {free: cons, text: cons, number: cons, boolean: cons, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thNotNull = function() {
+		var cons, type;
+		cons = this.getAttr("notnull") === null ? "NULL" : "RAISE(ABORT, '" + this.getMessage("notnull") + "')";
+		type = {free: cons, text: cons, number: cons, boolean: cons, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.whType = function() {
+		var type = {
+			free: null,
+			text: ([
+				"UPPER(new." + this.col + ") GLOB '*[^A-Z ]*'",
+				"UPPER(new." + this.col + ") NOT GLOB '[A-Z]*[A-Z]'",
+				"new." + this.col + " GLOB '*  *'"
+			]).join(" OR "),
+			number: "UPPER(TYPEOF(new." + this.col  + ")) NOT IN ('INTEGER', 'REAL')",
+			boolean: "new." + this.col  + " NOT IN (0, 1)",
+			date: "DATE(new." + this.col  + ", '+1 day', '-1 day') != new." + this.col,
+			time: ([
+				"TIME(new." + this.col  + ") IS NULL",
+				"new." + this.col  + " NOT GLOB '[0-2][0-9]:[0-5][0-9]:[0-5][0-9]'"
+			]).join(" OR "),
+			key: ([
+				"UPPER(TYPEOF(new." + this.col  + ")) != 'INTEGER'",
+				"(SELECT COUNT(*) FROM " + this.getAttr("table")  + " WHERE _id_ = new." + this.col  + ") != 1"
+			]).join(" OR ")
+		};
+		return type[this.type()];
+	}
+
+	Column.prototype.thType = function() {
+		var cons, type;
+		cons = "RAISE(ABORT, '" + this.getMessage(this.type() === "key" ? "table" : "type") + "')";
+		type = {free: null, text: cons, number: cons, boolean: cons, date: cons, time: cons, key: cons};
+		return type[this.type()];
+	}
+
+	Column.prototype.whUnique = function() {
+		var cons, type, eq, val;
+		eq   = this.type() === "text" ? "LIKE" : "=";
+		val  = "(SELECT COUNT(*) FROM " + this.tab + " WHERE " + this.col + " " + eq + " new." + this.col + ") > 0"
+		cons = this.getAttr("unique") === null ? null : val;
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thUnique = function() {
+		var cons, type;
+		cons = this.whUnique() === null ? null : "RAISE(ABORT, '" + this.getMessage("unique") + "')";
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.whMin = function() {
+		var cons, type;
+		cons = this.getAttr("min") === null ? null : this.getLimit("min");
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thMin = function() {
+		var cons, type;
+		cons = this.whMin() === null ? null : "RAISE(ABORT, '" + this.getMessage("min") + "')";
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.whMax = function() {
+		var cons, type;
+		cons = this.getAttr("max") === null ? null : this.getLimit("max");
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thMax = function() {
+		var cons, type;
+		cons = this.whMax() === null ? null : "RAISE(ABORT, '" + this.getMessage("max") + "')";
+		type = {free: cons, text: cons, number: cons, boolean: null, date: cons, time: cons, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.whGlob = function() {
+		var cons, type;
+		cons = this.getAttr("glob") === null ? null : "new." + this.col + " NOT GLOB '" + this.getAttr("glob") + "'";
+		type = {free: cons, text: null, number: null, boolean: null, date: null, time: null, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thGlob = function() {
+		var cons, type;
+		cons = this.whGlob() === null ? null : "RAISE(ABORT, '" + this.getMessage("glob") + "')";
+		type = {free: cons, text: null, number: null, boolean: null, date: null, time: null, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.whLike = function() {
+		var cons, type;
+		cons = this.getAttr("like") === null ? null : "new." + this.col + " NOT LIKE '" + this.getAttr("like") + "'";
+		type = {free: cons, text: null, number: null, boolean: null, date: null, time: null, key: null};
+		return type[this.type()];
+	}
+
+	Column.prototype.thLike = function() {
+		var cons, type;
+		cons = this.whLike("like") === null ? null : "RAISE(ABORT, '" + this.getMessage("like") + "')";
+		type = {free: cons, text: null, number: null, boolean: null, date: null, time: null, key: null};
+		return type[this.type()];
+	}
+
+	/*__ Obtendo Atributo default ____________________________________________*/
+	Column.prototype.getDefault = function() {
+		var value, error, test;
+		error = false;
+		value = this.getAttr("default");
+		switch(this.type()) {
+			case "free":
+				if (value !== null) value = "'" + value + "'";
+				break;
+			case "text":
+				test  = RE.TEXT.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = "'" + value + "'";
+				break;
+			case "number":
+				test  = !isNaN(value);
+				error = value !== null && !test ? true : error;
+				break;
+			case "boolean":
+				test  = RE.BOOL0.test(value) || RE.BOOL1.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = RE.BOOL1.test(value) ? "1" : "0";
+				break;
+			case "date":
+				test  = RE.DATE.test(value) || RE.FDATE.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = RE.FDATE.test(value) ? value : "'" + value + "'";
+				break;
+			case "time":
+				test  = RE.TIME.test(value) || RE.FTIME.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = RE.FTIME.test(value) ? value : "'" + value + "'";
+				break;
+			default:
+				value = null;
+		}
+		if (error === true) this.error("Badly formatted attribute (default).");
+		return value;	
+	}
+
+	/*__ Obtendo Atributo min/max ____________________________________________*/
+	Column.prototype.getLimit = function(attr) {
+		var value, error, test, sign;
+		error = false;
+		value = this.getAttr(attr);
+		sign  = attr === "min" ? " < " : " > ";
+		switch(this.type()) {
+			case "free":
+				if (value !== null) value = "new." + this.col + sign + "'" + value + "'";
+				break;
+			case "text":
+				test  = RE.TEXTW.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = "LENGTH(new." + this.col + ")" + sign + value;
+				break;
+			case "number":
+				test  = !isNaN(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) value = "new." + this.col + sign + value;
+				break;
+			case "date":
+				test  = RE.DATE.test(value) || RE.FDATE.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) {
+					value = RE.FDATE.test(value) ? "new." + this.col + sign + value : "new." + this.col + sign + "'" + value + "'";
+				}
+				break;
+			case "time":
+				test  = RE.TIME.test(value) || RE.FTIME.test(value);
+				error = value !== null && !test ? true : error;
+				if (value !== null) {
+					value = RE.FTIME.test(value) ? "new." + this.col + sign + value : "new." + this.col + sign + "'" + value + "'";
+				}
+				break;
+			default:
+				value = null;
+		}
+		if (error === true) this.error("Badly formatted attribute (" + attr + ").");
+		return value;	
+	}
+
+	/*__ Obtendo Restrições __________________________________________________*/
+	Column.prototype.getConstraints = function(cons) {
+		var x, val;
+		x = [];
+		for (var i = 0; i < cons.length; i++) {
+			val = this[cons[i]]();
+			if (val !== null) x.push(val);
+		}
+		return x;
+	}
+
+	/*__ Obtendo menssagens __________________________________________________*/
+	Column.prototype.defaultMessages = {
+		notnull: "Required value.",
+		unique:  "Existing registration.",
+		min:     "Value less than allowed.",
+		max:     "Greater than allowed value.",
+		glob:    "Value in the wrong format.",
+		like:    "Value in the wrong format.",
+		type:    "Value in the wrong format.",
+		table:   "Register not found."
+	} 
+
+	Column.prototype.getMessage = function(tag) {
+		var x, msg;
+		tag = tag.toLowerCase();
+		x   = this.col + ": " + this.defaultMessages[tag];
+		msg = this.xml.getElementsByTagName("message");
+		for (var i = 0; i < msg.length; i++) {
+			if (msg[i].getAttribute("onerror") === null) continue;
+			if (msg[i].getAttribute("onerror") !== tag) continue;
+			x = msg[i].childNodes[0].nodeValue;
+			break;
+		}
+		return x;
+	}
+
+	/*__ Retornando objeto ___________________________________________________*/
 	return XSQLite;
 })();
