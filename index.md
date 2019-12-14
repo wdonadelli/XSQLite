@@ -18,47 +18,43 @@ The JavaScript language was chosen with a view to its use in the web environment
 
 The XML structure has the following tags:
 
-### `<sql>`
+### sql
 
 It is the root tag of the XML structure. It is required, must contain opening and closing tags (`<sql></sql>`), has no attributes and must be unique.
 
-### `<table>`
+### table
 
 Child of the root tag, this element defines the creation of a table. At least one table must be entered in the structure. It should contain opening and closing tags (`<table></table>`). The element has the required attribute "name" that defines the table name. There can be no more than one table with the same name.
 
-### `<column>`
+### column
 
 Child of the table tag, this element defines the creation of a column. At least one column must be entered for each table. If it has children, the element must contain opening and closing tags (`<column></column>` (with childs) or `<column/>`). The element has the required attribute "name" that defines the name of the column. Column names must be unique for the same table, repeated names are not allowed. Can contain the following attributes:
 
 - type
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 - glob
 - like
-- source
+- table
 
-Depending on the type attribute you enter, some attributes may have no effect on the element.
+Depending on the type of column you choose, some attributes may have no effect on the element.
 
-### `<type>`, `<unique>`, `<notNull>`, `<min>`, `<max>`, `<glob>` and `<like>`
+### message
 
-Children of the column tag, is an optional element that defines the error message when the attribute of the same name fails verification. It has no attributes and must contain opening and closing tags.
+Child of the column tag, is an optional element that defines the error message when verification fails. Must contain opening and closing tags (`<message></message>`). Can contain the following attributes:
 
-The element must be unique. If there is more than one, only the first will be considered.
+- onerror
 
-If elements are not created, a default message is assigned to return the error message when the value entered does not meet the criteria.
+If error messages are not created, a default message is assigned to return upon failure.
 
 ## Attributes
 
 ### name
 
-The `name` attribute defines the name of the column or table and may contain the format given by the following regular expression (JavaScript notation):
-
-```js
-/^[A-Z]([A-Z0-9\_]+)?$/i
-```
+The `name` attribute defines the name of the column or table and can contain letters (basic Latin alphabet), numbers, and underscores, but must start with an alphabetic character (`/^[A-Z]([A-Z0-9\_]+)?$/i`).
 
 It is a required attribute to define tables and columns.
 
@@ -66,23 +62,23 @@ It is a required attribute to define tables and columns.
 
 The `type` attribute defines the type of data that the column will receive. The following options are possible:
 
-* text
-* number
-* boolean
-* date
-* time
-* free
-* id
+- free (default)
+- text
+- number
+- boolean
+- date
+- time
+- key
 
-If not informed, the type "free" will be set.
+If not entered, the "free" type will be set. The attribute is not case sensitive.
 
 ### unique
 
 The `unique` attribute defines whether the column value should be unique in the table. The attribute has no specific value, its existence already characterizes the constraint.
 
-### notNull
+### notnull
 
-The `not Null` attribute defines that the column value cannot be null. The attribute has no specific value, its existence already characterizes the constraint.
+The `notnull` attribute defines that the column value cannot be null. The attribute has no specific value, its existence already characterizes the constraint.
 
 ### default
 
@@ -104,141 +100,133 @@ The `glob` attribute defines an arrival rule for the column value (_SQLite GLOB 
 
 The `like` attribute defines an arrival rule for the column value (_SQLite LIKE function_).
 
-### source
+### table
 
-The `source` attribute sets the name of the reference column to the value of the column.
+The `table` attribute defines the name of the reference table for the column values. Applies only to column of type "key".
+
+### onerror
+
+The `onerror` attribute, required to make the element active, defines the object of the error message.
+
+The attributes must be unique. If there is more than one element with the same attribute value, only the first one is considered.
+
+Accepts the following case-insensitive values:
+
+- type
+- notnull
+- unique
+- min
+- max
+- like
+- glob
+- table
+
+The message will refer to the failure occurred in the eponymous attribute of its column.
 
 ## Column types
 
-### `text`
+### text
 
-Column defined with type equal to `text` only accepts alphabetic characters. Special characters (ç, à, É), punctuation, empty string, double spaces and spaces at the beginning or end will not be allowed. It is case insensitive in checking repeated values.
+Column defined with type equal to "text" only accepts alphabetic characters. Special characters (ç, à, É), punctuation, empty string, double spaces and spaces at the beginning or end will not be allowed (`/^[A-Z]+((\ [A-Z]+)+)?$/i`). It is case insensitive in checking repeated values.
 
 The following attributes are accepted:
 
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 
 The `min` and` max` attributes indicate the minimum and maximum number of characters, respectively, therefore the value must be numeric greater than zero.
 
-The value of the `default` attribute obeys the following regular expression:
+The SQLite column type constraint is "TEXT".
 
-```js
-/^[A-Z]+((\ [A-Z]+)+)?$/i
-```
-The SQLite column type constraint is `TEXT`.
+### number
 
-### `number`
-
-The column defined with type equal to `number` accepts only values ​​whose type are numbers (integer or real).
+The column defined with type equal to "number" accepts only values ​​whose type are numbers (integer or real).
 
 The following attributes are accepted:
 
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 
-The SQLite column type constraint is `NUMBER`.
+The SQLite column type constraint is "NUMBER".
 
-### `boolean`
+### boolean
 
-The column defined with type equal to `boolean` only accepts integer values: 1 for true and 0 for false.
+The column defined with type equal to "boolean" only accepts integer values: 1 for true and 0 for false.
 
 The following attributes are accepted:
 
-- notNull
+- notnull
 - default
 
-The value of the `default` attribute obeys the following regular expression:
+The value of the `default` attribute can also be "true" or "false" without case sensitivity (`/^(1|TRUE|0|FALSE)$/i`).
 
-```js
-/^(1|TRUE|0|FALSE)$/i
-```
+The SQLite column type constraint is "INTEGER".
 
-The SQLite column type constraint is `INTEGER`.
+### date
 
-### `date`
-
-The column defined with type equal to "date" accepts only values ​​corresponding to valid dates.
+The column defined with type equal to "date" accepts only values ​​corresponding to valid dates ("YYYY-MM-DD").
 
 The following attributes are accepted:
 
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 
-The `default`, `min` and` max` attributes accept the following values:
+The `default`,` min` and `max` attributes accept valid ISO 8601 date formats (`/^[0-9]{4}(\-[0-9]{2}){2}$/`) and the SQLite DATE function (`/^DATE\(.*\)$/i`).
 
-The value of the `default`, `min` and` max` attributes obeys the following regular expressions:
+The SQLite column type constraint is "TEXT".
 
-```js
-/^[0-9]{4}(\-[0-9]{2}){2}$/
-```
+### time
 
-```js
-/^DATE\(.*\)$/i //DATE SQLite function
-```
-
-The SQLite column type constraint is `TEXT`.
-
-### `time`
-
-The column defined with type equal to "time" accepts only values ​​corresponding to valid times.
+The column defined with type equal to "time" accepts only values ​​corresponding to valid times ("HH:MM:SS").
 
 The following attributes are accepted:
 
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 
-The value of the `default`, `min` and` max` attributes obeys the following regular expressions:
+The `default`, `min` and `max` attributes accept valid time formats (`/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/`) and the SQLite TIME function (`/^TIME\(.*\)$/i`).
 
-```js
-/^([01][0-9]|2[0-3])(\:[0-5][0-9]){2}$/
-```
+The SQLite column type constraint is "TEXT".
 
-```js
-/^TIME\(.*\)$/i //TIME SQLite function
-```
-
-The SQLite column type constraint is `TEXT`.
-
-### `free`
+### free
 
 The column defined with type equal to "free" accepts any value in text format. It is case sensitive when checking repeated values.
 
 The following attributes are accepted:
 
 - unique
-- notNull
+- notnull
 - default
 - min
 - max
 - like
 - glob
 
-The SQLite column type constraint is `TEXT`.
+The SQLite column type constraint is "TEXT".
 
-### `id`
+### key
 
-The column defined with the type "id" accepts only integers that match the identifiers in another table. Your goal is to define columns with foreign keys.
+The column defined with the type "key" accepts only integers that match the identifiers in another table. Your goal is to define columns with foreign keys.
 
 The following attribute is accepted:
 
-- source
+- table
 
-The `source` attribute accepts value in the same format as the name attribute and must match the name of the table where the reference for the foreign key will be created. It is a required attribute.
+The `table` attribute accepts value in the same format as the name attribute and must match the name of the table where the reference for the foreign key will be created. It is a required attribute.
 
-The SQLite column type constraint is `INTEGER`.
+The SQLite column type constraint is "INTEGER".
 
 ## SQLite Products
 
@@ -248,11 +236,17 @@ For each column entered in XML two tables will be created, the main one where th
 
 The main table will have all columns defined in XML plus the `_id_` column, automatically created by the application, which will be the primary key of the table.
 
-The log table will have all columns defined in XML plus the automatic columns `_event_`, which will record the type of update performed, and `_log_`, which will record the time of the update.
+The log table will have all columns defined in default table plus the automatic columns `_event_`, which will record the type of update performed, and `_log_`, which will record the time of the update.
 
 The log table will record the insertion (0), update (1) and deletion (2) events.
 
 By default, the log table cannot have data changed or deleted.
+
+### Views (new)
+
+For each table built, a view will be created.
+
+The columns referenced in the view will have the format `table.column`.
 
 ### Triggers
 
@@ -271,6 +265,21 @@ The following triggers will be created in the log table:
 #### BEFORE UPDATE and BEFORE DELETE
 
 These triggers will not allow changing or deleting log table data.
+
+### Products Name
+
+Product                     | Name
+--------------------------- | --------------------------------
+Table                       | *tableName*
+Log                         | *_log_tableName*
+View                        | *_vw_tableName*
+Trigger Before Insert       | *_tr_before_insert_tableName*
+Trigger Before Update       | *_tr_before_update_tableName*
+Trigger After Insert        | *_tr_after_insert_tableName*
+Trigger After Update        | *_tr_after_update_tableName*
+Trigger After Delete        | *_tr_after_delete_tableName*
+Trigger Before Update (log) | *_tr_before_update_log_tableName*
+Trigger Before Delete (log) | *_tr_before_delete_log_tableName*
 
 ## The code generator
 
@@ -312,41 +321,41 @@ Copy the project below, paste it into the [code generator](XSQLite.html) and che
 <?xml version="1.0" encoding="UTF-8"?>
 <sql>
 	<table name="clients">
-		<column name="name" type="text" notNull="">
-			<type>Enter the customer name accordingly.</type>
-			<notNull>Client name is required.</notNull>
+		<column name="name" type="text" notnull="">
+			<message onerror="type">Enter the customer name accordingly.</message>
+			<message onerror="notnull">Client name is required.</message>
 		</column>
-		<column name="birth" type="date" notNull="" max="DATE('now', '-18 years')">
-			<type>Enter the date of birth accordingly.</type>
-			<notNull>Date of birth is required.</notNull>
-			<max>Customer must be over 18 years old.</max>
+		<column name="birth" type="date" notnull="" max="DATE('now', '-18 years')">
+			<message onerror="type">Enter the date of birth accordingly.</message>
+			<message onerror="notnull">Date of birth is required.</message>
+			<message onerror="max">Customer must be over 18 years old.</message>
 		</column>
-		<column name="doc" type="number" notNull="" min="1" max="9999999" unique="">
-			<type>Enter the customer document number.</type>
-			<notNull>Document number is required.</notNull>
-			<min>Document number must be from 1.</min>
-			<max>Document number must be up to 9999999.</max>
-			<unique>Document number already used.</unique>
+		<column name="doc" type="number" notnull="" min="1" max="9999999" unique="">
+			<message onerror="type">Enter the customer document number.</message>
+			<message onerror="notnull">Document number is required.</message>
+			<message onerror="min">Document number must be from 1.</message>
+			<message onerror="max">Document number must be up to 9999999.</message>
+			<message onerror="unique">Document number already used.</message>
 		</column>
 	</table>
 	<table name="products">
-		<column name="name" type="text" notNull="" unique="">
-			<type>Enter the product name accordingly.</type>
-			<notNull>Product name is required.</notNull>
-			<unique>Product already registered.</unique>
+		<column name="name" type="text" notnull="" unique="">
+			<message onerror="type">Enter the product name accordingly.</message>
+			<message onerror="notnull">Product name is required.</message>
+			<message onerror="unique">Product already registered.</message>
 		</column>
 	</table>
 	<table name="sales">
-		<column name="client_id" type="id" source="clients">
-			<type>Customer not registered.</type>
+		<column name="client_id" type="key" table="clients">
+			<message onerror="type">Customer not registered.</message>
 		</column>
-		<column name="product_id" type="id" source="products">
-			<type>Product not registered.</type>
+		<column name="product_id" type="key" table="products">
+			<message onerror="type">Product not registered.</message>
 		</column>
-		<column name="value" type="number" notNull="" min="0.01">
-			<type>Enter the value of the product.</type>
-			<notNull>Product value is required.</notNull>
-			<min>Minimum product value must be $ 0.01.</min>
+		<column name="value" type="number" notnull="" min="0.01">
+			<message onerror="type">Enter the value of the product.</message>
+			<message onerror="notnull">Product value is required.</message>
+			<message onerror="min">Minimum product value must be $ 0.01.</message>
 		</column>
 	</table>
 </sql>
@@ -359,11 +368,24 @@ _The above example is merely illustrative, without concern for reality._
 Below are some tools for compiling SQLite code:
 
 - [SQLite Reader](https://addons.mozilla.org/pt-BR/firefox/addon/sql-reader/) (Firefox Add-ons)
-- sqlite3 (Linux): `sqlite3 -init file`
+- [CLI sqlite3](https://www.sqlite.org/cli.html)
 
-## Version
+## Release Notes
 
-- _v1.0.0 (2019-10-18)_
+### v2.0.0
+
+- Published on 30/12/2019
+- The column element of type "id" has been deprecated, giving way to element of type "key", keeping the same purpose.
+- The "source" attribute has been deprecated, giving way to the "table" attribute, keeping the same purpose.
+- The "notNull" attribute has been deprecated, giving way to the "notnull" attribute, keeping the same purpose.
+- The elements "type", "unique", "notNull", "min", "max", "glob" and "like", children of the column element and intended to customize failed verification messages, have been deprecated, giving way to the "message" element, maintaining the same purpose.
+- The "onerror" attribute was created for the "message" element in order to define the type of failure that the message is attached to.
+- Trigger structures have been modified.
+- Started to build views.
+
+### v1.0.0
+
+- Published on 2019-10-18
 
 ## Author
 
