@@ -374,7 +374,7 @@ Below are some tools for compiling SQLite code:
 
 ### v2.0.0
 
-- Published on 30/12/2019
+- Published on 2019-12-14
 - The column element of type "id" has been deprecated, giving way to element of type "key", keeping the same purpose.
 - The "source" attribute has been deprecated, giving way to the "table" attribute, keeping the same purpose.
 - The "notNull" attribute has been deprecated, giving way to the "notnull" attribute, keeping the same purpose.
