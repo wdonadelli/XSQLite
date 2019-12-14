@@ -268,7 +268,7 @@ These triggers will not allow changing or deleting log table data.
 
 ### Products Name
 
-|Product                     |Name                             |
+|__Product__                 |__Name__                         |
 |:-------------------------- |:--------------------------------|
 |Table                       |*tableName*                      |
 |Log                         |*_log_tableName*                 |
