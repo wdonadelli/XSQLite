@@ -17,5 +17,8 @@ The JavaScript language was chosen with a view to its use in the web environment
 - [Click here](https://wdonadelli.github.io/XSQLite/XSQLite.html) to access the code generator.
 - [Click here](https://wdonadelli.github.io/XSQLite/) to view the handbook.
 
+## Example
+
+See the running project through the example available at [WebExample1](https://github.com/wdonadelli/WebExample1).
 
 _Willian Donadelli_ (<wdonadelli@gmail.com>)
