@@ -226,6 +226,8 @@ The following attribute is accepted:
 
 The `table` attribute accepts value in the same format as the name attribute and must match the name of the table where the reference for the foreign key will be created. It is a required attribute.
 
+**Exception**: To define an error message in the "key" column, the `onerror` attribute of the `message` tag must have the value "table".
+
 The SQLite column type constraint is "INTEGER".
 
 ## SQLite Products
@@ -347,10 +349,10 @@ Copy the project below, paste it into the [code generator](XSQLite.html) and che
 	</table>
 	<table name="sales">
 		<column name="client_id" type="key" table="clients">
-			<message onerror="type">Customer not registered.</message>
+			<message onerror="table">Customer not registered.</message>
 		</column>
 		<column name="product_id" type="key" table="products">
-			<message onerror="type">Product not registered.</message>
+			<message onerror="table">Product not registered.</message>
 		</column>
 		<column name="value" type="number" notnull="" min="0.01">
 			<message onerror="type">Enter the value of the product.</message>

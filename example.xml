@@ -27,10 +27,10 @@
 	</table>
 	<table name="sales">
 		<column name="client_id" type="key" table="clients">
-			<message onerror="type">Customer not registered.</message>
+			<message onerror="table">Customer not registered.</message>
 		</column>
 		<column name="product_id" type="key" table="products">
-			<message onerror="type">Product not registered.</message>
+			<message onerror="table">Product not registered.</message>
 		</column>
 		<column name="value" type="number" notnull="" min="0.01">
 			<message onerror="type">Enter the value of the product.</message>
